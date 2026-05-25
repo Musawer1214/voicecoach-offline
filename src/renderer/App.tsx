@@ -27,6 +27,7 @@ import {
   LevelState,
   SavedSession,
   SessionMetadata,
+  TranscriptDocument,
   VoiceCoachSession,
   VolumeSample
 } from "../shared/types";
@@ -41,6 +42,7 @@ import {
   smoothDb
 } from "./audio/level";
 import { buildAudioReport } from "./audio/report";
+import { buildTextSuggestions } from "./text/suggestions";
 
 type Screen = "home" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
@@ -502,6 +504,35 @@ export function App() {
     }
   }
 
+  async function saveReviewTranscript(text: string) {
+    if (!reviewSession) {
+      return;
+    }
+
+    try {
+      setError("");
+      const transcript: TranscriptDocument = {
+        schemaVersion: 1,
+        sessionId: reviewSession.session.id,
+        source: "manual",
+        text,
+        updatedAt: new Date().toISOString()
+      };
+      const textSuggestions = buildTextSuggestions(reviewSession.session.id, text);
+      const saved = await window.voiceCoach.saveTranscript({
+        sessionId: reviewSession.session.id,
+        transcript,
+        textSuggestions
+      });
+      const savedSessions = await window.voiceCoach.listSessions();
+      setReviewSession(saved);
+      setSessions(savedSessions);
+      setWarning("Transcript analyzed locally");
+    } catch (transcriptError) {
+      setError(formatError(transcriptError));
+    }
+  }
+
   const calibrationPercent = Math.min(100, Math.round((calibrationProgressMs / CALIBRATION_TOTAL_MS) * 100));
 
   return (
@@ -513,7 +544,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.1.0"}</span>
+            <span>v{meta?.version ?? "0.3.0"}</span>
           </div>
         </div>
 
@@ -596,6 +627,7 @@ export function App() {
             onExportReport={exportReviewReport}
             onRevealFolder={revealReviewFolder}
             onDeleteSession={deleteReviewSession}
+            onSaveTranscript={saveReviewTranscript}
           />
         )}
 
@@ -839,6 +871,7 @@ function ReviewScreen({
   onOpenSession,
   onReanalyzeSession,
   onRevealFolder,
+  onSaveTranscript,
   onUpdateMetadata,
   session,
   sessions
@@ -849,6 +882,7 @@ function ReviewScreen({
   onOpenSession: (session: SavedSession) => void;
   onReanalyzeSession: () => void;
   onRevealFolder: () => void;
+  onSaveTranscript: (text: string) => void;
   onUpdateMetadata: (metadata: SessionMetadata) => void;
   session: SavedSession | null;
   sessions: SavedSession[];
@@ -857,6 +891,7 @@ function ReviewScreen({
   const [draftTitle, setDraftTitle] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
+  const [draftTranscript, setDraftTranscript] = useState("");
   const hasCalibrationGap = Boolean(session && session.session.calibrationId === null);
   const hasCalibrationMismatch = Boolean(
     session?.session.calibrationId && calibration && session.session.calibrationId !== calibration.id
@@ -867,6 +902,7 @@ function ReviewScreen({
     setDraftTitle(session?.session.metadata?.title ?? "");
     setDraftPrompt(session?.session.metadata?.prompt ?? "");
     setDraftNotes(session?.session.metadata?.notes ?? "");
+    setDraftTranscript(session?.transcript?.text ?? "");
   }, [session?.session.id]);
 
   function saveMetadata() {
@@ -878,6 +914,10 @@ function ReviewScreen({
       audioRef.current.currentTime = ms / 1000;
       void audioRef.current.play();
     }
+  }
+
+  function saveTranscript() {
+    onSaveTranscript(draftTranscript);
   }
 
   return (
@@ -965,6 +1005,23 @@ function ReviewScreen({
                 </button>
               </div>
             </section>
+            <section className="transcript-panel">
+              <div className="panel-title">
+                <FileText size={18} />
+                <h2>Manual Transcript</h2>
+              </div>
+              <textarea
+                value={draftTranscript}
+                onChange={(event) => setDraftTranscript(event.target.value)}
+                placeholder="Paste or type the transcript here. VoiceCoach will run local grammar and clarity checks."
+              />
+              <div className="row-actions">
+                <button className="secondary-button compact-button" onClick={saveTranscript}>
+                  <Save size={16} /> Save and Analyze
+                </button>
+              </div>
+              {session.textSuggestions && <TextSuggestionsPanel document={session.textSuggestions} />}
+            </section>
             <div className="path-box">{session.folderPath}</div>
           </section>
         </>
@@ -1017,7 +1074,7 @@ function SettingsScreen({
           onRefreshDevices={onRefreshDevices}
         />
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.1.0"} />
+          <Metric label="Version" value={meta?.version ?? "0.3.0"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
@@ -1156,6 +1213,27 @@ function AudioReportPanel({ onSeek, report }: { onSeek: (ms: number) => void; re
             <span>{suggestion.detail}</span>
             {suggestion.startMs !== undefined && <em>{formatMs(suggestion.startMs)}</em>}
           </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TextSuggestionsPanel({ document }: { document: NonNullable<SavedSession["textSuggestions"]> }) {
+  return (
+    <section className="text-report">
+      <div className="dashboard-grid">
+        <Metric label="Words" value={String(document.metrics.wordCount)} />
+        <Metric label="Sentences" value={String(document.metrics.sentenceCount)} />
+        <Metric label="Fillers" value={String(document.metrics.fillerCount)} />
+        <Metric label="Long Sentences" value={String(document.metrics.longSentenceCount)} />
+      </div>
+      <div className="suggestion-list">
+        {document.suggestions.map((suggestion) => (
+          <div key={suggestion.id} className={`suggestion-card ${suggestion.severity}`}>
+            <strong>{suggestion.title}</strong>
+            <span>{suggestion.detail}</span>
+          </div>
         ))}
       </div>
     </section>

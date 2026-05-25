@@ -2,7 +2,7 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger and clearer speaking volume.
 
-Current version: `0.2.0`
+Current version: `0.3.0`
 
 This release is an audio-coaching prototype. It proves the core loop:
 
@@ -12,27 +12,25 @@ This release is an audio-coaching prototype. It proves the core loop:
 - save local session JSON and `recording.webm`
 - review saved timeline markers
 
-No internet, cloud service, transcription, camera recording, screen recording, or SQLite database is used in `0.1.x`.
+No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.0`.
 
-## What's New in 0.2.0
+## What's New in 0.3.0
 
-- versioned `report.json` audio coaching reports
-- per-session calibration snapshots for more honest review data
-- session title, prompt, and notes
-- selected microphone saved in local settings
-- report export to local Markdown
-- session folder reveal and delete actions
-- richer review suggestions for volume, silence, consistency, and clipping
+- manual transcript editor in review
+- local `transcript.json` storage
+- local `suggestions.json` grammar and clarity suggestions
+- filler-word, repeated-phrase, long-sentence, and weak-opening checks
+- text feedback works offline without Whisper or cloud services
 
 ## Project Status
 
-`0.2.0` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
+`0.3.0` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
 
 Planned future work:
 
-- `0.2.x`: offline transcription with `whisper.cpp`
-- `0.3.x`: grammar and clarity suggestions after recording
-- `0.4.x`: richer review reports and progress tracking
+- `0.4.x`: optional offline transcription engine
+- `0.5.x`: stronger grammar suggestions and timeline-linked transcript segments
+- `1.0.0`: complete offline speaking coach with stable installer/portable release
 - `1.0.0`: complete offline speaking coach with stable installer/portable release
 
 ## Requirements
@@ -84,7 +82,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.2.0.exe
+release/VoiceCoach Offline 0.3.0.exe
 ```
 
 Unpacked builds are written to:
@@ -107,6 +105,8 @@ VoiceCoachData/
       recording.webm
       session.json
       report.json
+      transcript.json
+      suggestions.json
       report.md
 ```
 
@@ -123,7 +123,7 @@ Session and calibration files use `schemaVersion: 1`.
 
 ## Privacy
 
-`0.1.x` is fully offline. Audio recordings and session metadata stay on the user's PC.
+`0.3.0` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
 
 ## License
 

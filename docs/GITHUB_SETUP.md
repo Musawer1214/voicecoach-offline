@@ -47,6 +47,7 @@ Use release names like:
 VoiceCoach Offline v0.1.0
 VoiceCoach Offline v0.1.1
 VoiceCoach Offline v0.2.0
+VoiceCoach Offline v0.3.0
 ```
 
 ## Release Notes Template

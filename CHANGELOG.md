@@ -5,9 +5,25 @@ All notable changes to VoiceCoach Offline will be documented here.
 This project follows pre-`1.0.0` semantic versioning:
 
 - `0.1.x`: audio-coaching prototype fixes
-- `0.2.x`: offline transcription
-- `0.3.x`: grammar and clarity suggestions
+- `0.2.x`: offline audio reports
+- `0.3.x`: transcript and local suggestions
+- `0.4.x`: optional offline transcription
 - `1.0.0`: stable public release
+
+## 0.3.0 - 2026-05-25
+
+Added:
+
+- manual transcript editor in the review screen
+- versioned `transcript.json` storage
+- versioned `suggestions.json` local text-analysis output
+- offline filler-word, repeated-phrase, long-sentence, and weak-opening checks
+- transcript metrics for word count, sentence count, filler count, and long sentence count
+
+Not included:
+
+- automatic offline transcription
+- bundled Whisper model or binary
 
 ## 0.2.0 - 2026-05-25
 

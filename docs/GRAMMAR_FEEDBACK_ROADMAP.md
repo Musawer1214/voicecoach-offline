@@ -29,11 +29,28 @@ Avoid wording like:
 - "Bad grammar"
 - "Failed"
 
+## Current Status in `0.3.0`
+
+`0.3.0` starts grammar and clarity feedback without automatic transcription.
+
+Added:
+
+- manual transcript editor in the review screen
+- `transcript.json` saved beside the session
+- `suggestions.json` saved beside the session
+- local checks for filler words, repeated phrases, long sentences, and weak openings
+
+Still deferred:
+
+- automatic offline speech-to-text
+- bundled Whisper model or binary
+- timestamped transcript segments
+
 ## Required Prerequisite: Offline Transcription
 
 Grammar feedback needs text. The app must first create a transcript from the saved recording.
 
-Recommended path for `0.2.x`:
+Recommended future path:
 
 - use `whisper.cpp`
 - run it locally as a bundled command-line engine
@@ -67,7 +84,7 @@ Tradeoff:
 
 ## Alternative: Lightweight Rule-Based Coach
 
-Before bundling LanguageTool, `0.3.0` can start with a lightweight local grammar and speaking-style analyzer.
+Before bundling LanguageTool, the app can continue improving the lightweight local grammar and speaking-style analyzer that started in `0.3.0`.
 
 Rules:
 
@@ -82,7 +99,27 @@ This approach is less powerful than LanguageTool but easier to ship offline.
 
 ## Suggested Version Plan
 
-### `0.2.0`: Offline Transcript
+### `0.2.0`: Offline Audio Reports
+
+Completed:
+
+- versioned `report.json`
+- audio coaching metrics and suggestions
+- session notes, export, delete, and calibration snapshots
+
+### `0.3.0`: Manual Transcript and Local Suggestions
+
+Completed:
+
+- manual transcript editor
+- versioned `transcript.json`
+- versioned `suggestions.json`
+- filler word counts
+- long sentence detection
+- repeated phrase detection
+- weak opening detection
+
+### `0.4.0`: Offline Transcript
 
 Add:
 
@@ -100,7 +137,7 @@ sessions/<date>/
   transcript.json
 ```
 
-### `0.3.0`: First Grammar Suggestions
+### `0.5.0`: Stronger Grammar Suggestions
 
 Add:
 
@@ -110,7 +147,7 @@ Add:
 - repeated phrase detection
 - timeline links from suggestions to transcript segments
 
-### `0.4.0`: Local LanguageTool Integration
+### `0.6.0`: Local LanguageTool Integration
 
 Add:
 
@@ -119,7 +156,7 @@ Add:
 - replacement text suggestions
 - setting to enable/disable grammar engine
 
-### `0.5.0`: Speaking Coach Report
+### `0.7.0`: Speaking Coach Report
 
 Add:
 
@@ -135,7 +172,7 @@ Add:
 type Transcript = {
   schemaVersion: 1;
   sessionId: string;
-  engine: "whisper.cpp";
+  engine: "manual" | "whisper.cpp";
   language: string;
   segments: Array<{
     id: string;

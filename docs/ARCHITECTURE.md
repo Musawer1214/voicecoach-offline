@@ -131,16 +131,16 @@ Events:
 - `contextIsolation: true`
 - `nodeIntegration: false`
 - renderer file writes go through IPC
-- no internet or cloud services in `0.1.x`
+- no internet or cloud services in `0.3.0`
 
 ## Future Architecture Notes
 
-Grammar feedback should not be added directly to the live audio layer. It should be added after offline transcription exists:
+Grammar feedback should not be added directly to the live audio layer. In `0.3.0`, manual transcript feedback is a separate review artifact. Automatic offline transcription can be added later as another provider:
 
 ```text
 recording.webm
-  -> offline transcription
-  -> transcript with timestamps
-  -> grammar/style analysis
-  -> suggestions linked to review timeline
+  -> report.json
+  -> optional transcript.json
+  -> suggestions.json
+  -> review screen
 ```
