@@ -14,6 +14,16 @@ export function buildTextSuggestions(sessionId: string, text: string): TextSugge
   const longSentences = sentences.filter((sentence) => countWords(sentence) >= LONG_SENTENCE_WORDS);
   const suggestions: CoachingSuggestion[] = [];
 
+  if (words.length === 0) {
+    suggestions.push({
+      id: "text-empty",
+      category: "transcript",
+      severity: "info",
+      title: "Add transcript text",
+      detail: "Paste or type a transcript to run local grammar and clarity suggestions."
+    });
+  }
+
   if (fillerMatches > 0) {
     suggestions.push({
       id: "text-fillers",

@@ -10,6 +10,19 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.4.x`: optional offline transcription
 - `1.0.0`: stable public release
 
+## 0.3.1 - 2026-05-25
+
+Fixed:
+
+- exported Markdown reports now include manual transcript text
+- exported Markdown reports now include transcript metrics and local suggestions
+- empty transcript analysis now shows an actionable message instead of looking complete
+- production builds now clean stale `dist` output before rebuilding
+
+Tests:
+
+- added coverage for Markdown report export with audio, transcript, and suggestion sections
+
 ## 0.3.0 - 2026-05-25
 
 Added:

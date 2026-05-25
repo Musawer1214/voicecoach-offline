@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.3.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, and local text suggestions.
+`0.3.1` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, and transcript-aware Markdown exports.
 
 ## Why Electron
 
@@ -29,7 +29,7 @@ SQLite can be introduced later when session search, filtering, analytics, or lon
 
 ## Why No Transcription Yet
 
-The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, and `0.3.0` added manual transcript suggestions. Automatic offline transcription remains deferred until the review workflow is stable.
+The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, and `0.3.1` made exported reports include that transcript feedback. Automatic offline transcription remains deferred until the review workflow is stable.
 
 ## Electron Launch Note
 
@@ -39,7 +39,7 @@ Some shell environments may set:
 ELECTRON_RUN_AS_NODE=1
 ```
 
-That makes Electron behave like Node and can break app startup. The `npm run dev` script clears it before launching Electron.
+That makes Electron behave like Node and can break app startup, including packaged-app smoke tests launched from the same shell. The `npm run dev` script clears it before launching Electron. For manual packaged smoke tests from PowerShell, clear it for that process before starting the EXE.
 
 ## Documentation Rule
 

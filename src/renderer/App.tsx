@@ -544,7 +544,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.3.0"}</span>
+            <span>v{meta?.version ?? "0.3.1"}</span>
           </div>
         </div>
 
@@ -1074,7 +1074,7 @@ function SettingsScreen({
           onRefreshDevices={onRefreshDevices}
         />
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.3.0"} />
+          <Metric label="Version" value={meta?.version ?? "0.3.1"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />

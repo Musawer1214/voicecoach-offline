@@ -20,6 +20,7 @@ import {
   isTranscriptDocument,
   isVoiceCoachSession
 } from "../shared/types.js";
+import { buildMarkdownReport } from "../shared/markdownReport.js";
 
 const DATA_DIR_NAME = "VoiceCoachData";
 const CALIBRATION_FILE = "calibration.json";
@@ -221,7 +222,11 @@ export async function exportSessionReport(payload: SessionIdPayload): Promise<st
   const found = await findSessionFolder(payload.sessionId);
   const extras = await readSessionExtras(found.folderPath);
   const exportPath = path.join(found.folderPath, "report.md");
-  await writeFile(exportPath, buildMarkdownReport(found.session, extras.report), "utf8");
+  await writeFile(
+    exportPath,
+    buildMarkdownReport(found.session, extras.report, extras.transcript, extras.textSuggestions),
+    "utf8"
+  );
   return exportPath;
 }
 
@@ -318,56 +323,4 @@ async function findSessionFolder(sessionId: string): Promise<{
   }
 
   throw new Error("Session was not found.");
-}
-
-function buildMarkdownReport(session: VoiceCoachSession, report: AudioReport | null): string {
-  const title = session.metadata?.title || "VoiceCoach Session";
-  const lines = [
-    `# ${title}`,
-    "",
-    `Created: ${session.createdAt}`,
-    `Duration: ${formatMs(session.durationMs)}`,
-    `Calibration: ${session.calibrationId ?? "none"}`,
-    ""
-  ];
-
-  if (session.metadata?.prompt) {
-    lines.push("## Practice Prompt", "", session.metadata.prompt, "");
-  }
-
-  if (session.metadata?.notes) {
-    lines.push("## Notes", "", session.metadata.notes, "");
-  }
-
-  if (report) {
-    lines.push(
-      "## Audio Report",
-      "",
-      `Overall score: ${report.metrics.overallScore}/100`,
-      `Target volume: ${report.metrics.targetVolumePercent}%`,
-      `Low volume: ${report.metrics.lowVolumePercent}%`,
-      `Speaking ratio: ${report.metrics.speakingRatioPercent}%`,
-      `Volume consistency: ${report.metrics.volumeConsistencyScore}/100`,
-      `Long pauses: ${report.metrics.longPauseCount}`,
-      `Clipping events: ${report.metrics.clippingEventCount}`,
-      ""
-    );
-
-    if (report.suggestions.length > 0) {
-      lines.push("## Suggestions", "");
-      for (const suggestion of report.suggestions) {
-        lines.push(`- **${suggestion.title}**: ${suggestion.detail}`);
-      }
-      lines.push("");
-    }
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function formatMs(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }

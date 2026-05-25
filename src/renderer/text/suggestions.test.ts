@@ -26,4 +26,11 @@ describe("text suggestions", () => {
     expect(result.metrics.wordCount).toBe(8);
     expect(result.suggestions[0].severity).toBe("success");
   });
+
+  it("returns an actionable message for empty transcript text", () => {
+    const result = buildTextSuggestions("session-1", "");
+
+    expect(result.metrics.wordCount).toBe(0);
+    expect(result.suggestions[0].id).toBe("text-empty");
+  });
 });

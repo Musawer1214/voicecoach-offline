@@ -8,6 +8,7 @@ VoiceCoach Offline uses semantic versioning, with `0.x` versions treated as acti
 0.1.0  audio-coaching prototype
 0.2.0  offline audio coaching reports
 0.3.0  transcript and local suggestion prototype
+0.3.1  transcript-aware Markdown export fix
 0.4.0  richer review reports
 1.0.0  stable offline speaking coach
 ```
@@ -25,7 +26,7 @@ Patch versions are for fixes:
 Use Git tags for releases:
 
 ```powershell
-git tag v0.3.0
+git tag v0.3.1
 git push origin main --tags
 ```
 

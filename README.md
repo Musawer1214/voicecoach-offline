@@ -2,7 +2,7 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger and clearer speaking volume.
 
-Current version: `0.3.0`
+Current version: `0.3.1`
 
 This release is an audio-coaching prototype. It proves the core loop:
 
@@ -12,25 +12,22 @@ This release is an audio-coaching prototype. It proves the core loop:
 - save local session JSON and `recording.webm`
 - review saved timeline markers
 
-No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.0`.
+No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.1`.
 
-## What's New in 0.3.0
+## What's New in 0.3.1
 
-- manual transcript editor in review
-- local `transcript.json` storage
-- local `suggestions.json` grammar and clarity suggestions
-- filler-word, repeated-phrase, long-sentence, and weak-opening checks
-- text feedback works offline without Whisper or cloud services
+- exported Markdown reports now include manual transcript text
+- exported Markdown reports now include local transcript metrics and suggestions
+- empty transcript analysis now shows an actionable message
 
 ## Project Status
 
-`0.3.0` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
+`0.3.1` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
 
 Planned future work:
 
 - `0.4.x`: optional offline transcription engine
 - `0.5.x`: stronger grammar suggestions and timeline-linked transcript segments
-- `1.0.0`: complete offline speaking coach with stable installer/portable release
 - `1.0.0`: complete offline speaking coach with stable installer/portable release
 
 ## Requirements
@@ -82,7 +79,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.3.0.exe
+release/VoiceCoach Offline 0.3.1.exe
 ```
 
 Unpacked builds are written to:
@@ -123,7 +120,7 @@ Session and calibration files use `schemaVersion: 1`.
 
 ## Privacy
 
-`0.3.0` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
+`0.3.1` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
 
 ## License
 

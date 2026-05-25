@@ -1,17 +1,18 @@
 {
   "name": "voicecoach-offline",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Offline-first Windows voice volume coaching prototype.",
   "productName": "VoiceCoach Offline",
   "author": "VoiceCoach Offline contributors",
   "private": true,
   "main": "dist/main/main.js",
   "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "dev": "npm-run-all -p dev:renderer dev:electron:watch dev:electron:run",
     "dev:renderer": "vite --host 127.0.0.1",
     "dev:electron:watch": "tsc -p tsconfig.node.json --watch --preserveWatchOutput",
     "dev:electron:run": "wait-on tcp:5173 dist/main/main.js dist/preload/preload.js && cross-env ELECTRON_RUN_AS_NODE= ELECTRON_NO_ATTACH_CONSOLE= VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .",
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
+    "build": "npm run clean && tsc -p tsconfig.json && tsc -p tsconfig.node.json && vite build",
     "package:dir": "npm run build && electron-builder --dir --win",
     "dist:portable": "npm run build && electron-builder --win portable",
     "test": "vitest run"

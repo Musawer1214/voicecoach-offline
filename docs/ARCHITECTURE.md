@@ -61,6 +61,10 @@ VoiceCoachData/
     <session-date>/
       recording.webm
       session.json
+      report.json
+      transcript.json
+      suggestions.json
+      report.md
 ```
 
 `calibration.json`:
@@ -91,6 +95,8 @@ type VoiceCoachSession = {
   durationMs: number;
   deviceId: string;
   calibrationId: string | null;
+  calibrationSnapshot?: CalibrationProfile | null;
+  metadata?: SessionMetadata;
   recordingFile: "recording.webm";
   samples: VolumeSample[];
   events: SessionEvent[];
@@ -131,11 +137,11 @@ Events:
 - `contextIsolation: true`
 - `nodeIntegration: false`
 - renderer file writes go through IPC
-- no internet or cloud services in `0.3.0`
+- no internet or cloud services in `0.3.x`
 
 ## Future Architecture Notes
 
-Grammar feedback should not be added directly to the live audio layer. In `0.3.0`, manual transcript feedback is a separate review artifact. Automatic offline transcription can be added later as another provider:
+Grammar feedback should not be added directly to the live audio layer. In `0.3.x`, manual transcript feedback is a separate review artifact and exported Markdown reports include that feedback. Automatic offline transcription can be added later as another provider:
 
 ```text
 recording.webm
