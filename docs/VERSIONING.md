@@ -6,8 +6,8 @@ VoiceCoach Offline uses semantic versioning, with `0.x` versions treated as acti
 
 ```text
 0.1.0  audio-coaching prototype
-0.2.0  offline transcription prototype
-0.3.0  grammar suggestion prototype
+0.2.0  offline audio coaching reports
+0.3.0  transcript and local suggestion prototype
 0.4.0  richer review reports
 1.0.0  stable offline speaking coach
 ```

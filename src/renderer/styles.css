@@ -19,7 +19,9 @@ body {
 }
 
 button,
-select {
+select,
+input,
+textarea {
   font: inherit;
 }
 
@@ -165,6 +167,7 @@ p {
 .primary-button,
 .secondary-button,
 .stop-button,
+.danger-button,
 .icon-button {
   display: inline-flex;
   align-items: center;
@@ -192,6 +195,11 @@ p {
 .stop-button {
   color: #ffffff;
   background: #dc2626;
+}
+
+.danger-button {
+  color: #ffffff;
+  background: #b91c1c;
 }
 
 .icon-button {
@@ -260,6 +268,13 @@ button:disabled {
   gap: 14px;
 }
 
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .panel,
 .metric,
 .practice-surface {
@@ -314,6 +329,39 @@ button:disabled {
   border-radius: 8px;
   padding: 0 12px;
   background: #ffffff;
+}
+
+.session-setup-panel,
+.metadata-editor,
+.report-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.session-setup-panel label,
+.metadata-editor label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-weight: 700;
+}
+
+.session-setup-panel input,
+.session-setup-panel textarea,
+.metadata-editor input,
+.metadata-editor textarea {
+  width: 100%;
+  border: 1px solid #d5dbe5;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #111827;
+  background: #ffffff;
+}
+
+.session-setup-panel textarea,
+.metadata-editor textarea {
+  min-height: 76px;
+  resize: vertical;
 }
 
 .meter {
@@ -475,7 +523,9 @@ button:disabled {
   position: absolute;
   bottom: 0;
   height: 100%;
+  border: 0;
   opacity: 0.28;
+  cursor: pointer;
 }
 
 .event-marker.low_volume {
@@ -517,6 +567,57 @@ button:disabled {
   font-family: "Cascadia Code", Consolas, monospace;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+
+.report-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.report-details span {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f1f5f9;
+}
+
+.suggestion-list {
+  display: grid;
+  gap: 10px;
+}
+
+.suggestion-card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  text-align: left;
+}
+
+.suggestion-card.success {
+  border-left-color: #14b8a6;
+}
+
+.suggestion-card.info {
+  border-left-color: #2563eb;
+}
+
+.suggestion-card.warning {
+  border-left-color: #f59e0b;
+}
+
+.suggestion-card span,
+.suggestion-card em {
+  color: #64748b;
+  font-style: normal;
 }
 
 .session-list {

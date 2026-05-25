@@ -2,7 +2,7 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger and clearer speaking volume.
 
-Current version: `0.1.1`
+Current version: `0.2.0`
 
 This release is an audio-coaching prototype. It proves the core loop:
 
@@ -14,16 +14,19 @@ This release is an audio-coaching prototype. It proves the core loop:
 
 No internet, cloud service, transcription, camera recording, screen recording, or SQLite database is used in `0.1.x`.
 
-## What's New in 0.1.1
+## What's New in 0.2.0
 
-- review now warns when a session was recorded without calibration
-- old uncalibrated sessions can be reanalyzed with the current calibration
-- recording samples are timed from recording start instead of microphone startup
-- fallback speech detection is stricter when no calibration exists
+- versioned `report.json` audio coaching reports
+- per-session calibration snapshots for more honest review data
+- session title, prompt, and notes
+- selected microphone saved in local settings
+- report export to local Markdown
+- session folder reveal and delete actions
+- richer review suggestions for volume, silence, consistency, and clipping
 
 ## Project Status
 
-`0.1.1` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
+`0.2.0` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
 
 Planned future work:
 
@@ -81,7 +84,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.1.1.exe
+release/VoiceCoach Offline 0.2.0.exe
 ```
 
 Unpacked builds are written to:
@@ -103,6 +106,8 @@ VoiceCoachData/
     <session-date>/
       recording.webm
       session.json
+      report.json
+      report.md
 ```
 
 Session and calibration files use `schemaVersion: 1`.

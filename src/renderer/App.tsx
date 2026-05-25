@@ -2,13 +2,18 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Download,
+  ExternalLink,
+  FileText,
   FolderOpen,
   Mic,
   Play,
   Radio,
   RotateCcw,
+  Save,
   Settings,
   Square,
+  Trash2,
   Timer,
   Volume2,
   Wand2
@@ -16,9 +21,12 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppMeta,
+  AppSettings,
+  AudioReport,
   CalibrationProfile,
   LevelState,
   SavedSession,
+  SessionMetadata,
   VoiceCoachSession,
   VolumeSample
 } from "../shared/types";
@@ -32,6 +40,7 @@ import {
   rmsToDb,
   smoothDb
 } from "./audio/level";
+import { buildAudioReport } from "./audio/report";
 
 type Screen = "home" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
@@ -53,9 +62,13 @@ export function App() {
   const [meta, setMeta] = useState<AppMeta | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [settings, setSettings] = useState<AppSettings | null>(null);
   const [calibration, setCalibration] = useState<CalibrationProfile | null>(null);
   const [sessions, setSessions] = useState<SavedSession[]>([]);
   const [reviewSession, setReviewSession] = useState<SavedSession | null>(null);
+  const [practiceTitle, setPracticeTitle] = useState("");
+  const [practicePrompt, setPracticePrompt] = useState("");
+  const [practiceNotes, setPracticeNotes] = useState("");
   const [level, setLevel] = useState(initialLevel);
   const [audioMode, setAudioMode] = useState<AudioMode>("idle");
   const [isRecording, setIsRecording] = useState(false);
@@ -96,21 +109,24 @@ export function App() {
 
   async function initializeApp() {
     try {
-      const [appMeta, savedCalibration, savedSessions] = await Promise.all([
+      const [appMeta, savedSettings, savedCalibration, savedSessions] = await Promise.all([
         window.voiceCoach.getAppMeta(),
+        window.voiceCoach.loadSettings(),
         window.voiceCoach.loadCalibration(),
         window.voiceCoach.listSessions()
       ]);
       setMeta(appMeta);
+      setSettings(savedSettings);
+      setSelectedDeviceId(savedSettings?.selectedDeviceId ?? "");
       setCalibration(savedCalibration);
       setSessions(savedSessions);
-      await refreshDevices(false);
+      await refreshDevices(false, savedSettings?.selectedDeviceId ?? "");
     } catch (appError) {
       setError(formatError(appError));
     }
   }
 
-  async function refreshDevices(requestPermission: boolean) {
+  async function refreshDevices(requestPermission: boolean, preferredDeviceId = selectedDeviceId) {
     try {
       if (requestPermission) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
@@ -120,9 +136,26 @@ export function App() {
       const availableDevices = await navigator.mediaDevices.enumerateDevices();
       const microphones = availableDevices.filter((device) => device.kind === "audioinput");
       setDevices(microphones);
-      setSelectedDeviceId((current) => current || microphones[0]?.deviceId || "");
+      setSelectedDeviceId((current) => preferredDeviceId || current || microphones[0]?.deviceId || "");
     } catch (deviceError) {
       setError(formatError(deviceError));
+    }
+  }
+
+  async function selectDevice(deviceId: string) {
+    setSelectedDeviceId(deviceId);
+    const device = devices.find((item) => item.deviceId === deviceId);
+    const nextSettings: AppSettings = {
+      schemaVersion: 1,
+      selectedDeviceId: deviceId,
+      selectedDeviceLabel: device?.label || "Default microphone",
+      updatedAt: new Date().toISOString()
+    };
+    setSettings(nextSettings);
+    try {
+      await window.voiceCoach.saveSettings(nextSettings);
+    } catch (settingsError) {
+      setError(formatError(settingsError));
     }
   }
 
@@ -229,6 +262,7 @@ export function App() {
       recordingWallStartedAtRef.current ? Math.round(performance.now() - recordingWallStartedAtRef.current) : 0
     );
     const events = analyzeSessionSamples(samples, calibrationForSession);
+    const metadata = buildSessionMetadata(practiceTitle, practicePrompt, practiceNotes);
     const session: VoiceCoachSession = {
       schemaVersion: 1,
       id: crypto.randomUUID(),
@@ -236,11 +270,14 @@ export function App() {
       durationMs,
       deviceId: selectedDeviceId,
       calibrationId: calibrationForSession?.id ?? null,
+      calibrationSnapshot: calibrationForSession,
+      metadata,
       recordingFile: "recording.webm",
       samples,
       events,
       summary: buildSessionSummary(samples, events, calibrationForSession)
     };
+    const report = buildAudioReport(session, calibrationForSession);
     activeRecordingCalibrationRef.current = null;
     recordingStartedAtMsRef.current = null;
     recordingWallStartedAtRef.current = null;
@@ -248,12 +285,16 @@ export function App() {
     try {
       const saved = await window.voiceCoach.saveSession({
         session,
+        report,
         recordingData: await recordingBlob.arrayBuffer()
       });
       const savedSessions = await window.voiceCoach.listSessions();
       setSessions(savedSessions);
       setReviewSession(saved);
       setScreen("review");
+      setPracticeTitle("");
+      setPracticePrompt("");
+      setPracticeNotes("");
       stopMicrophone();
     } catch (saveError) {
       setError(formatError(saveError));
@@ -379,13 +420,85 @@ export function App() {
     try {
       setError("");
       const updated = reanalyzeSessionWithCalibration(reviewSession.session, calibration);
-      const saved = await window.voiceCoach.updateSession({ session: updated });
+      const updatedWithSnapshot = { ...updated, calibrationSnapshot: calibration };
+      await window.voiceCoach.updateSession({ session: updatedWithSnapshot });
+      const saved = await window.voiceCoach.saveReport({
+        sessionId: updatedWithSnapshot.id,
+        report: buildAudioReport(updatedWithSnapshot, calibration)
+      });
       const savedSessions = await window.voiceCoach.listSessions();
       setReviewSession(saved);
       setSessions(savedSessions);
       setWarning("Session reanalyzed with current calibration");
     } catch (reanalyzeError) {
       setError(formatError(reanalyzeError));
+    }
+  }
+
+  async function updateReviewMetadata(metadata: SessionMetadata) {
+    if (!reviewSession) {
+      return;
+    }
+
+    try {
+      setError("");
+      const updatedSession = { ...reviewSession.session, metadata };
+      const saved = await window.voiceCoach.updateSession({ session: updatedSession });
+      const savedSessions = await window.voiceCoach.listSessions();
+      setReviewSession(saved);
+      setSessions(savedSessions);
+      setWarning("Session details saved");
+    } catch (metadataError) {
+      setError(formatError(metadataError));
+    }
+  }
+
+  async function exportReviewReport() {
+    if (!reviewSession) {
+      return;
+    }
+
+    try {
+      setError("");
+      const exportPath = await window.voiceCoach.exportSessionReport({ sessionId: reviewSession.session.id });
+      setWarning(`Report exported: ${exportPath}`);
+    } catch (exportError) {
+      setError(formatError(exportError));
+    }
+  }
+
+  async function revealReviewFolder() {
+    if (!reviewSession) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.voiceCoach.revealSessionFolder({ sessionId: reviewSession.session.id });
+    } catch (revealError) {
+      setError(formatError(revealError));
+    }
+  }
+
+  async function deleteReviewSession() {
+    if (!reviewSession) {
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this local session folder? This removes the recording and JSON files.");
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError("");
+      await window.voiceCoach.deleteSession({ sessionId: reviewSession.session.id });
+      const savedSessions = await window.voiceCoach.listSessions();
+      setSessions(savedSessions);
+      setReviewSession(savedSessions[0] ?? null);
+      setWarning("Session deleted");
+    } catch (deleteError) {
+      setError(formatError(deleteError));
     }
   }
 
@@ -445,7 +558,7 @@ export function App() {
           <CalibrationScreen
             devices={devices}
             selectedDeviceId={selectedDeviceId}
-            onSelectDevice={setSelectedDeviceId}
+            onSelectDevice={selectDevice}
             onRefreshDevices={() => refreshDevices(true)}
             onStartCalibration={startCalibration}
             progressPercent={calibrationPercent}
@@ -460,6 +573,12 @@ export function App() {
             calibration={calibration}
             level={level}
             isRecording={isRecording}
+            title={practiceTitle}
+            prompt={practicePrompt}
+            notes={practiceNotes}
+            onChangeTitle={setPracticeTitle}
+            onChangePrompt={setPracticePrompt}
+            onChangeNotes={setPracticeNotes}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
             onStartCalibration={startCalibration}
@@ -473,6 +592,10 @@ export function App() {
             sessions={sessions}
             onOpenSession={openSession}
             onReanalyzeSession={reanalyzeReviewSession}
+            onUpdateMetadata={updateReviewMetadata}
+            onExportReport={exportReviewReport}
+            onRevealFolder={revealReviewFolder}
+            onDeleteSession={deleteReviewSession}
           />
         )}
 
@@ -481,9 +604,10 @@ export function App() {
             meta={meta}
             devices={devices}
             selectedDeviceId={selectedDeviceId}
-            onSelectDevice={setSelectedDeviceId}
+            onSelectDevice={selectDevice}
             onRefreshDevices={() => refreshDevices(true)}
             calibration={calibration}
+            settings={settings}
           />
         )}
       </main>
@@ -622,16 +746,28 @@ function PracticeScreen({
   calibration,
   isRecording,
   level,
+  notes,
+  onChangeNotes,
+  onChangePrompt,
+  onChangeTitle,
   onStartCalibration,
   onStartRecording,
-  onStopRecording
+  onStopRecording,
+  prompt,
+  title
 }: {
   calibration: CalibrationProfile | null;
   isRecording: boolean;
   level: typeof initialLevel;
+  notes: string;
+  onChangeNotes: (value: string) => void;
+  onChangePrompt: (value: string) => void;
+  onChangeTitle: (value: string) => void;
   onStartCalibration: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  prompt: string;
+  title: string;
 }) {
   return (
     <section className="screen">
@@ -646,6 +782,36 @@ function PracticeScreen({
           </button>
         )}
       </header>
+
+      <section className="panel session-setup-panel">
+        <label>
+          Session title
+          <input
+            value={title}
+            onChange={(event) => onChangeTitle(event.target.value)}
+            placeholder="Practice session"
+            disabled={isRecording}
+          />
+        </label>
+        <label>
+          Practice prompt
+          <textarea
+            value={prompt}
+            onChange={(event) => onChangePrompt(event.target.value)}
+            placeholder="Example: Explain my project in one minute."
+            disabled={isRecording}
+          />
+        </label>
+        <label>
+          Notes
+          <textarea
+            value={notes}
+            onChange={(event) => onChangeNotes(event.target.value)}
+            placeholder="What should I focus on during this take?"
+            disabled={isRecording}
+          />
+        </label>
+      </section>
 
       <section className="practice-surface">
         <VolumeMeter level={level} calibration={calibration} large />
@@ -668,21 +834,51 @@ function PracticeScreen({
 
 function ReviewScreen({
   calibration,
+  onDeleteSession,
+  onExportReport,
   onOpenSession,
   onReanalyzeSession,
+  onRevealFolder,
+  onUpdateMetadata,
   session,
   sessions
 }: {
   calibration: CalibrationProfile | null;
+  onDeleteSession: () => void;
+  onExportReport: () => void;
   onOpenSession: (session: SavedSession) => void;
   onReanalyzeSession: () => void;
+  onRevealFolder: () => void;
+  onUpdateMetadata: (metadata: SessionMetadata) => void;
   session: SavedSession | null;
   sessions: SavedSession[];
 }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftPrompt, setDraftPrompt] = useState("");
+  const [draftNotes, setDraftNotes] = useState("");
   const hasCalibrationGap = Boolean(session && session.session.calibrationId === null);
   const hasCalibrationMismatch = Boolean(
     session?.session.calibrationId && calibration && session.session.calibrationId !== calibration.id
   );
+  const hasMissingReport = Boolean(session && !session.report);
+
+  useEffect(() => {
+    setDraftTitle(session?.session.metadata?.title ?? "");
+    setDraftPrompt(session?.session.metadata?.prompt ?? "");
+    setDraftNotes(session?.session.metadata?.notes ?? "");
+  }, [session?.session.id]);
+
+  function saveMetadata() {
+    onUpdateMetadata(buildSessionMetadata(draftTitle, draftPrompt, draftNotes, session?.session.metadata?.tags ?? []));
+  }
+
+  function seekAudio(ms: number) {
+    if (audioRef.current) {
+      audioRef.current.currentTime = ms / 1000;
+      void audioRef.current.play();
+    }
+  }
 
   return (
     <section className="screen">
@@ -696,6 +892,17 @@ function ReviewScreen({
       {session ? (
         <>
           <section className="panel">
+            <div className="review-actions">
+              <button className="secondary-button compact-button" onClick={onExportReport} disabled={!session.report}>
+                <Download size={16} /> Export Report
+              </button>
+              <button className="secondary-button compact-button" onClick={onRevealFolder}>
+                <ExternalLink size={16} /> Folder
+              </button>
+              <button className="danger-button compact-button" onClick={onDeleteSession}>
+                <Trash2 size={16} /> Delete
+              </button>
+            </div>
             {hasCalibrationGap && (
               <div className="inline-warning">
                 <AlertTriangle size={18} />
@@ -714,17 +921,50 @@ function ReviewScreen({
                 </button>
               </div>
             )}
+            {hasMissingReport && !hasCalibrationGap && (
+              <div className="inline-warning subtle">
+                <FileText size={18} />
+                <span>This session has no saved audio report yet.</span>
+                <button className="secondary-button compact-button" onClick={onReanalyzeSession} disabled={!calibration}>
+                  <RotateCcw size={16} /> Generate Report
+                </button>
+              </div>
+            )}
             <div className="audio-row">
               <Play size={18} />
-              <audio controls src={session.recordingUrl} />
+              <audio ref={audioRef} controls src={session.recordingUrl} />
             </div>
-            <Timeline session={session.session} />
+            <Timeline session={session.session} onSeek={seekAudio} />
             <div className="dashboard-grid">
               <Metric label="Duration" value={formatMs(session.session.durationMs)} />
               <Metric label="Target Time" value={`${session.session.summary.targetVolumePercent}%`} />
               <Metric label="Low Events" value={String(session.session.summary.lowVolumeEventCount)} />
               <Metric label="Silence Events" value={String(session.session.summary.silenceEventCount)} />
             </div>
+            {session.report && <AudioReportPanel report={session.report} onSeek={seekAudio} />}
+            <section className="metadata-editor">
+              <div className="panel-title">
+                <FileText size={18} />
+                <h2>Session Details</h2>
+              </div>
+              <label>
+                Title
+                <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} />
+              </label>
+              <label>
+                Practice prompt
+                <textarea value={draftPrompt} onChange={(event) => setDraftPrompt(event.target.value)} />
+              </label>
+              <label>
+                Notes
+                <textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} />
+              </label>
+              <div className="row-actions">
+                <button className="secondary-button compact-button" onClick={saveMetadata}>
+                  <Save size={16} /> Save Details
+                </button>
+              </div>
+            </section>
             <div className="path-box">{session.folderPath}</div>
           </section>
         </>
@@ -749,7 +989,8 @@ function SettingsScreen({
   meta,
   onRefreshDevices,
   onSelectDevice,
-  selectedDeviceId
+  selectedDeviceId,
+  settings
 }: {
   calibration: CalibrationProfile | null;
   devices: MediaDeviceInfo[];
@@ -757,6 +998,7 @@ function SettingsScreen({
   onRefreshDevices: () => void;
   onSelectDevice: (id: string) => void;
   selectedDeviceId: string;
+  settings: AppSettings | null;
 }) {
   return (
     <section className="screen">
@@ -778,6 +1020,7 @@ function SettingsScreen({
           <Metric label="Version" value={meta?.version ?? "0.1.0"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
+          <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
           <Metric label="Calibration" value={calibration ? calibration.createdAt.slice(0, 10) : "Not saved"} />
         </div>
       </section>
@@ -846,7 +1089,7 @@ function VolumeMeter({
   );
 }
 
-function Timeline({ session }: { session: VoiceCoachSession }) {
+function Timeline({ onSeek, session }: { onSeek?: (ms: number) => void; session: VoiceCoachSession }) {
   const duration = Math.max(session.durationMs, 1);
   const stride = Math.max(1, Math.ceil(session.samples.length / 180));
   const bars = session.samples.filter((_sample, index) => index % stride === 0);
@@ -863,9 +1106,10 @@ function Timeline({ session }: { session: VoiceCoachSession }) {
           />
         ))}
         {session.events.map((event) => (
-          <div
+          <button
             key={event.id}
             className={`event-marker ${event.type}`}
+            onClick={() => onSeek?.(event.startMs)}
             style={{
               left: `${(event.startMs / duration) * 100}%`,
               width: `${Math.max(1, ((event.endMs - event.startMs) / duration) * 100)}%`
@@ -879,6 +1123,42 @@ function Timeline({ session }: { session: VoiceCoachSession }) {
         <span><i className="legend silence" /> Silence</span>
       </div>
     </div>
+  );
+}
+
+function AudioReportPanel({ onSeek, report }: { onSeek: (ms: number) => void; report: AudioReport }) {
+  return (
+    <section className="report-panel">
+      <div className="panel-title">
+        <FileText size={18} />
+        <h2>Audio Coaching Report</h2>
+      </div>
+      <div className="dashboard-grid">
+        <Metric label="Score" value={`${report.metrics.overallScore}/100`} />
+        <Metric label="Low Volume" value={`${report.metrics.lowVolumePercent}%`} />
+        <Metric label="Speaking Ratio" value={`${report.metrics.speakingRatioPercent}%`} />
+        <Metric label="Consistency" value={`${report.metrics.volumeConsistencyScore}/100`} />
+      </div>
+      <div className="report-details">
+        <span>Average: {formatOptionalDb(report.metrics.averageDb)}</span>
+        <span>Peak: {formatOptionalDb(report.metrics.peakDb)}</span>
+        <span>Long pauses: {report.metrics.longPauseCount}</span>
+        <span>Clipping: {report.metrics.clippingEventCount}</span>
+      </div>
+      <div className="suggestion-list">
+        {report.suggestions.map((suggestion) => (
+          <button
+            key={suggestion.id}
+            className={`suggestion-card ${suggestion.severity}`}
+            onClick={() => suggestion.startMs !== undefined && onSeek(suggestion.startMs)}
+          >
+            <strong>{suggestion.title}</strong>
+            <span>{suggestion.detail}</span>
+            {suggestion.startMs !== undefined && <em>{formatMs(suggestion.startMs)}</em>}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -897,9 +1177,9 @@ function SessionList({
     <div className="session-list">
       {sessions.map((saved) => (
         <button key={saved.session.id} className="session-row" onClick={() => onOpenSession(saved)}>
-          <span>{new Date(saved.session.createdAt).toLocaleString()}</span>
+          <span>{saved.session.metadata?.title || new Date(saved.session.createdAt).toLocaleString()}</span>
           <strong>{formatMs(saved.session.durationMs)}</strong>
-          <em>{saved.session.summary.lowVolumeEventCount} low</em>
+          <em>{saved.report ? `${saved.report.metrics.overallScore}/100` : `${saved.session.summary.lowVolumeEventCount} low`}</em>
         </button>
       ))}
     </div>
@@ -921,6 +1201,16 @@ function preferredRecorderOptions(): MediaRecorderOptions | undefined {
     : undefined;
 }
 
+function buildSessionMetadata(title: string, prompt: string, notes: string, tags: string[] = []): SessionMetadata {
+  return {
+    title: title.trim() || "Practice session",
+    prompt: prompt.trim(),
+    notes: notes.trim(),
+    tags,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 function formatState(state: LevelState): string {
   return state === "silent" ? "Silent" : state === "quiet" ? "Quiet" : state === "good" ? "Good" : "Strong";
 }
@@ -930,6 +1220,10 @@ function formatMs(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatOptionalDb(value: number | null): string {
+  return value === null ? "--" : `${value} dB`;
 }
 
 function formatError(error: unknown): string {

@@ -9,6 +9,24 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.3.x`: grammar and clarity suggestions
 - `1.0.0`: stable public release
 
+## 0.2.0 - 2026-05-25
+
+Added:
+
+- versioned `report.json` audio coaching reports for each new session
+- per-session calibration snapshots
+- session title, practice prompt, and notes
+- selected microphone persistence through local `settings.json`
+- review report cards with score, low-volume percentage, speaking ratio, and consistency
+- actionable audio suggestions for volume, silence, consistency, calibration, and clipping
+- report export to local Markdown
+- session folder reveal and delete actions
+- v0.1.1 working-feature audit documentation
+
+Fixed:
+
+- review can now generate a missing report by reanalyzing with the current calibration
+
 ## 0.1.1 - 2026-05-25
 
 Fixed:
