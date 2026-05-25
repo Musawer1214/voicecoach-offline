@@ -6,9 +6,10 @@ import {
   listSessions,
   loadCalibration,
   saveCalibration,
-  saveSession
+  saveSession,
+  updateSession
 } from "./storage.js";
-import { CalibrationProfile, SaveSessionPayload } from "../shared/types.js";
+import { CalibrationProfile, SaveSessionPayload, UpdateSessionPayload } from "../shared/types.js";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -69,4 +70,5 @@ function registerIpcHandlers(): void {
   ipcMain.handle("calibration:save", (_event, profile: CalibrationProfile) => saveCalibration(profile));
   ipcMain.handle("sessions:list", () => listSessions());
   ipcMain.handle("sessions:save", (_event, payload: SaveSessionPayload) => saveSession(payload));
+  ipcMain.handle("sessions:update", (_event, payload: UpdateSessionPayload) => updateSession(payload));
 }

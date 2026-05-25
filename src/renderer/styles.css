@@ -207,6 +207,12 @@ p {
   font-size: 16px;
 }
 
+.compact-button {
+  min-height: 34px;
+  padding-inline: 10px;
+  font-size: 13px;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -226,6 +232,24 @@ button:disabled {
   border-color: #fecaca;
   color: #7f1d1d;
   background: #fee2e2;
+}
+
+.inline-warning {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #7c2d12;
+  background: #fff7ed;
+}
+
+.inline-warning.subtle {
+  border-color: #dbeafe;
+  color: #1e3a8a;
+  background: #eff6ff;
 }
 
 .dashboard-grid,

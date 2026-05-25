@@ -67,12 +67,17 @@ export type SaveSessionPayload = {
   recordingData: ArrayBuffer;
 };
 
+export type UpdateSessionPayload = {
+  session: VoiceCoachSession;
+};
+
 export type VoiceCoachApi = {
   getAppMeta(): Promise<AppMeta>;
   loadCalibration(): Promise<CalibrationProfile | null>;
   saveCalibration(profile: CalibrationProfile): Promise<CalibrationProfile>;
   listSessions(): Promise<SavedSession[]>;
   saveSession(payload: SaveSessionPayload): Promise<SavedSession>;
+  updateSession(payload: UpdateSessionPayload): Promise<SavedSession>;
 };
 
 export const SESSION_SCHEMA_VERSION = 1;

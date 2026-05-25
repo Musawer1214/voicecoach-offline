@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.1.0` is intentionally narrow. It validates the offline audio-coaching loop before adding transcription or grammar analysis.
+`0.1.1` is intentionally narrow. It validates the offline audio-coaching loop before adding transcription or grammar analysis.
 
 ## Why Electron
 
@@ -15,7 +15,7 @@ Electron was chosen for the first prototype because:
 - Windows packaging is supported through `electron-builder`
 - future webcam and screen capture are easier than starting with a lower-level native stack
 
-The main tradeoff is app size. That is acceptable for `0.1.0`.
+The main tradeoff is app size. That is acceptable for the `0.1.x` prototype.
 
 ## Why JSON Instead of SQLite
 
@@ -29,7 +29,7 @@ SQLite can be introduced later when session search, filtering, analytics, or lon
 
 ## Why No Transcription Yet
 
-The first risk is whether live volume coaching is useful and reliable. Transcription, grammar correction, and clarity scoring depend on a saved recording and timeline, so they start after `0.1.0`.
+The first risk is whether live volume coaching is useful and reliable. Transcription, grammar correction, and clarity scoring depend on a saved recording and timeline, so they start after `0.1.x`.
 
 ## Electron Launch Note
 

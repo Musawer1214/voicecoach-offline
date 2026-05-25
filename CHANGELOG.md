@@ -9,6 +9,20 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.3.x`: grammar and clarity suggestions
 - `1.0.0`: stable public release
 
+## 0.1.1 - 2026-05-25
+
+Fixed:
+
+- review screen now warns when a session was recorded before calibration
+- added session reanalysis with the current calibration profile
+- practice samples now use recording-relative timestamps
+- low-volume live warning now reads recording state from refs instead of stale React closures
+- fallback no-calibration speech detection is stricter, reducing noise-only samples
+
+Documentation:
+
+- updated README for public GitHub publishing and `0.1.1`
+
 ## 0.1.0 - 2026-05-25
 
 Initial offline audio-coaching prototype.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateRms, getLevelState, isSpeakingFrame, rmsToDb } from "./level";
+import { calculateRms, getLevelState, isSpeakingFrame, isSpeakingWithoutCalibration, rmsToDb } from "./level";
 import { CalibrationProfile } from "../../shared/types";
 
 const calibration: CalibrationProfile = {
@@ -30,6 +30,11 @@ describe("audio level utilities", () => {
   it("detects speaking above noise floor", () => {
     expect(isSpeakingFrame(-60, -72)).toBe(true);
     expect(isSpeakingFrame(-70, -72)).toBe(false);
+  });
+
+  it("uses a conservative fallback when calibration is missing", () => {
+    expect(isSpeakingWithoutCalibration(-50)).toBe(true);
+    expect(isSpeakingWithoutCalibration(-60)).toBe(false);
   });
 
   it("returns calibrated level states", () => {

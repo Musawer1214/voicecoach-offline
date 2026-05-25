@@ -7,9 +7,16 @@ This project is ready to become a public GitHub repository.
 Create an empty GitHub repository, then run:
 
 ```powershell
-git remote add origin https://github.com/<your-username>/<repo-name>.git
+git remote add origin https://github.com/Musawer1214/voicecoach-offline.git
 git branch -M main
 git push -u origin main
+git push origin --tags
+```
+
+If GitHub CLI is authenticated, this can create the public repository directly:
+
+```powershell
+gh repo create Musawer1214/voicecoach-offline --public --source . --remote origin --push
 git push origin --tags
 ```
 
@@ -38,6 +45,7 @@ Use release names like:
 
 ```text
 VoiceCoach Offline v0.1.0
+VoiceCoach Offline v0.1.1
 VoiceCoach Offline v0.2.0
 ```
 

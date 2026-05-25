@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { CalibrationProfile, VolumeSample } from "../../shared/types";
-import { analyzeSessionSamples, buildSessionSummary } from "./events";
+import { analyzeSessionSamples, buildSessionSummary, reanalyzeSessionWithCalibration } from "./events";
 
 const calibration: CalibrationProfile = {
   schemaVersion: 1,
@@ -61,6 +61,35 @@ describe("session event analysis", () => {
       longestLowVolumeMs: 1700,
       silenceEventCount: 1
     });
+  });
+
+  it("reanalyzes an uncalibrated session with the current calibration", () => {
+    const session = {
+      schemaVersion: 1 as const,
+      id: "session-1",
+      createdAt: "2026-05-25T00:00:00.000Z",
+      durationMs: 4000,
+      deviceId: "device-1",
+      calibrationId: null,
+      recordingFile: "recording.webm" as const,
+      samples: makeSamples([
+        { start: 0, end: 2000, db: -48, speaking: true },
+        { start: 2000, end: 4000, db: -36, speaking: true }
+      ]),
+      events: [],
+      summary: {
+        targetVolumePercent: 0,
+        lowVolumeEventCount: 0,
+        longestLowVolumeMs: 0,
+        silenceEventCount: 0
+      }
+    };
+
+    const updated = reanalyzeSessionWithCalibration(session, calibration);
+
+    expect(updated.calibrationId).toBe("calibration-1");
+    expect(updated.summary.targetVolumePercent).toBe(50);
+    expect(updated.summary.lowVolumeEventCount).toBe(1);
   });
 });
 

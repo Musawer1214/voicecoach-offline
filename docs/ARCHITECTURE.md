@@ -131,7 +131,7 @@ Events:
 - `contextIsolation: true`
 - `nodeIntegration: false`
 - renderer file writes go through IPC
-- no internet or cloud services in `0.1.0`
+- no internet or cloud services in `0.1.x`
 
 ## Future Architecture Notes
 

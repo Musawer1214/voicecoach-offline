@@ -1,4 +1,5 @@
 import { CalibrationProfile, SessionEvent, VoiceCoachSession, VolumeSample } from "../../shared/types";
+import { isSpeakingFrame } from "./level";
 
 const LOW_VOLUME_MIN_MS = 1500;
 const SILENCE_MIN_MS = 3000;
@@ -71,6 +72,25 @@ export function buildSessionSummary(
       0
     ),
     silenceEventCount: events.filter((event) => event.type === "silence").length
+  };
+}
+
+export function reanalyzeSessionWithCalibration(
+  session: VoiceCoachSession,
+  calibration: CalibrationProfile
+): VoiceCoachSession {
+  const samples = session.samples.map((sample) => ({
+    ...sample,
+    speaking: isSpeakingFrame(sample.db, calibration.noiseFloorDb)
+  }));
+  const events = analyzeSessionSamples(samples, calibration);
+
+  return {
+    ...session,
+    calibrationId: calibration.id,
+    samples,
+    events,
+    summary: buildSessionSummary(samples, events, calibration)
   };
 }
 

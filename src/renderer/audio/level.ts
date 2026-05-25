@@ -28,6 +28,10 @@ export function isSpeakingFrame(db: number, noiseFloorDb: number): boolean {
   return db > Math.max(noiseFloorDb + 6, -65);
 }
 
+export function isSpeakingWithoutCalibration(db: number): boolean {
+  return db > -55;
+}
+
 export function getLevelState(
   db: number,
   speaking: boolean,

@@ -6,6 +6,7 @@ import {
   CalibrationProfile,
   SavedSession,
   SaveSessionPayload,
+  UpdateSessionPayload,
   VoiceCoachSession,
   isVoiceCoachSession
 } from "../shared/types.js";
@@ -86,6 +87,39 @@ export async function saveSession(payload: SaveSessionPayload): Promise<SavedSes
   await writeJson(sessionPath, payload.session);
 
   return toSavedSession(payload.session, folderPath, sessionPath, recordingPath);
+}
+
+export async function updateSession(payload: UpdateSessionPayload): Promise<SavedSession> {
+  await ensureDataDirs();
+  if (!isVoiceCoachSession(payload.session)) {
+    throw new Error("Invalid session payload.");
+  }
+
+  const sessionsRoot = path.join(getDataDir(), SESSIONS_DIR);
+  const entries = await readdir(sessionsRoot, { withFileTypes: true });
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const folderPath = path.join(sessionsRoot, entry.name);
+    const sessionPath = path.join(folderPath, "session.json");
+    const recordingPath = path.join(folderPath, "recording.webm");
+
+    try {
+      const raw = await readFile(sessionPath, "utf8");
+      const existing = JSON.parse(raw) as VoiceCoachSession;
+      if (isVoiceCoachSession(existing) && existing.id === payload.session.id) {
+        await writeJson(sessionPath, payload.session);
+        return toSavedSession(payload.session, folderPath, sessionPath, recordingPath);
+      }
+    } catch {
+      // Ignore incomplete or manually edited session folders in this prototype.
+    }
+  }
+
+  throw new Error("Session was not found.");
 }
 
 function toSavedSession(

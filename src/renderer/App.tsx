@@ -1,12 +1,12 @@
 import {
   Activity,
+  AlertTriangle,
   BarChart3,
   FolderOpen,
   Mic,
   Play,
   Radio,
   RotateCcw,
-  Save,
   Settings,
   Square,
   Timer,
@@ -23,8 +23,15 @@ import {
   VolumeSample
 } from "../shared/types";
 import { createCalibrationProfile } from "./audio/calibration";
-import { analyzeSessionSamples, buildSessionSummary } from "./audio/events";
-import { calculateRms, getLevelState, isSpeakingFrame, rmsToDb, smoothDb } from "./audio/level";
+import { analyzeSessionSamples, buildSessionSummary, reanalyzeSessionWithCalibration } from "./audio/events";
+import {
+  calculateRms,
+  getLevelState,
+  isSpeakingFrame,
+  isSpeakingWithoutCalibration,
+  rmsToDb,
+  smoothDb
+} from "./audio/level";
 
 type Screen = "home" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
@@ -68,6 +75,17 @@ export function App() {
   const lastWarningAtRef = useRef(-Infinity);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const calibrationRef = useRef<CalibrationProfile | null>(null);
+  const isRecordingRef = useRef(false);
+  const warningRef = useRef("");
+  const activeRecordingCalibrationRef = useRef<CalibrationProfile | null>(null);
+  const microphoneElapsedMsRef = useRef(0);
+  const recordingStartedAtMsRef = useRef<number | null>(null);
+  const recordingWallStartedAtRef = useRef<number | null>(null);
+
+  calibrationRef.current = calibration;
+  isRecordingRef.current = isRecording;
+  warningRef.current = warning;
 
   useEffect(() => {
     void initializeApp();
@@ -140,6 +158,7 @@ export function App() {
 
       await window.voiceCoach.saveCalibration(profile);
       setCalibration(profile);
+      calibrationRef.current = profile;
       setWarning("Calibration saved");
       stopMicrophone();
     } catch (calibrationError) {
@@ -169,6 +188,10 @@ export function App() {
     practiceSamplesRef.current = [];
     lowStartedAtRef.current = null;
     lastWarningAtRef.current = -Infinity;
+    recordingStartedAtMsRef.current = microphoneElapsedMsRef.current;
+    recordingWallStartedAtRef.current = performance.now();
+    activeRecordingCalibrationRef.current = calibrationRef.current;
+
     const recorder = new MediaRecorder(streamRef.current, preferredRecorderOptions());
     recorderRef.current = recorder;
     recorder.ondataavailable = (event) => {
@@ -177,8 +200,13 @@ export function App() {
       }
     };
     recorder.start();
+    isRecordingRef.current = true;
     setIsRecording(true);
-    setWarning("");
+    setWarning(
+      activeRecordingCalibrationRef.current
+        ? ""
+        : "Recording without calibration - review metrics will be incomplete."
+    );
   }
 
   async function stopRecording() {
@@ -193,20 +221,29 @@ export function App() {
     });
 
     setIsRecording(false);
+    isRecordingRef.current = false;
     const samples = [...practiceSamplesRef.current];
-    const events = analyzeSessionSamples(samples, calibration);
+    const calibrationForSession = activeRecordingCalibrationRef.current;
+    const durationMs = Math.max(
+      samples.at(-1)?.tMs ?? 0,
+      recordingWallStartedAtRef.current ? Math.round(performance.now() - recordingWallStartedAtRef.current) : 0
+    );
+    const events = analyzeSessionSamples(samples, calibrationForSession);
     const session: VoiceCoachSession = {
       schemaVersion: 1,
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
-      durationMs: samples.at(-1)?.tMs ?? 0,
+      durationMs,
       deviceId: selectedDeviceId,
-      calibrationId: calibration?.id ?? null,
+      calibrationId: calibrationForSession?.id ?? null,
       recordingFile: "recording.webm",
       samples,
       events,
-      summary: buildSessionSummary(samples, events, calibration)
+      summary: buildSessionSummary(samples, events, calibrationForSession)
     };
+    activeRecordingCalibrationRef.current = null;
+    recordingStartedAtMsRef.current = null;
+    recordingWallStartedAtRef.current = null;
 
     try {
       const saved = await window.voiceCoach.saveSession({
@@ -224,28 +261,40 @@ export function App() {
   }
 
   function handlePracticeSample(db: number, rms: number, elapsedMs: number) {
-    const speaking = calibration ? isSpeakingFrame(db, calibration.noiseFloorDb) : db > -65;
-    const state = getLevelState(db, speaking, calibration);
-    const sample = { tMs: elapsedMs, db, rms, speaking };
-    practiceSamplesRef.current.push(sample);
+    microphoneElapsedMsRef.current = elapsedMs;
+    const currentCalibration = calibrationRef.current;
+    const speaking = currentCalibration
+      ? isSpeakingFrame(db, currentCalibration.noiseFloorDb)
+      : isSpeakingWithoutCalibration(db);
+    const state = getLevelState(db, speaking, currentCalibration);
     setLevel({ db, rms, speaking, state });
 
-    if (!isRecording || !calibration) {
+    if (!isRecordingRef.current) {
       return;
     }
 
-    const isLow = speaking && db < calibration.lowThresholdDb;
+    const recordingStartMs = recordingStartedAtMsRef.current ?? elapsedMs;
+    const recordingElapsedMs = Math.max(0, elapsedMs - recordingStartMs);
+    const sample = { tMs: recordingElapsedMs, db, rms, speaking };
+    practiceSamplesRef.current.push(sample);
+
+    const recordingCalibration = activeRecordingCalibrationRef.current;
+    if (!recordingCalibration) {
+      return;
+    }
+
+    const isLow = speaking && db < recordingCalibration.lowThresholdDb;
     if (isLow) {
-      lowStartedAtRef.current ??= elapsedMs;
-      const lowDuration = elapsedMs - lowStartedAtRef.current;
-      const cooldownElapsed = elapsedMs - lastWarningAtRef.current;
+      lowStartedAtRef.current ??= recordingElapsedMs;
+      const lowDuration = recordingElapsedMs - lowStartedAtRef.current;
+      const cooldownElapsed = recordingElapsedMs - lastWarningAtRef.current;
       if (lowDuration >= WARNING_LOW_MS && cooldownElapsed >= WARNING_COOLDOWN_MS) {
         setWarning("Voice is low - speak a little louder");
-        lastWarningAtRef.current = elapsedMs;
+        lastWarningAtRef.current = recordingElapsedMs;
       }
     } else {
       lowStartedAtRef.current = null;
-      if (warning.startsWith("Voice is low")) {
+      if (warningRef.current.startsWith("Voice is low")) {
         setWarning("");
       }
     }
@@ -302,6 +351,11 @@ export function App() {
     audioContextRef.current = null;
     analyserRef.current = null;
     recorderRef.current = null;
+    activeRecordingCalibrationRef.current = null;
+    recordingStartedAtMsRef.current = null;
+    recordingWallStartedAtRef.current = null;
+    microphoneElapsedMsRef.current = 0;
+    isRecordingRef.current = false;
     setAudioMode("idle");
     setIsRecording(false);
     setLevel(initialLevel);
@@ -310,6 +364,29 @@ export function App() {
   function openSession(session: SavedSession) {
     setReviewSession(session);
     setScreen("review");
+  }
+
+  async function reanalyzeReviewSession() {
+    if (!reviewSession) {
+      return;
+    }
+
+    if (!calibration) {
+      setError("Save a microphone calibration before reanalyzing this session.");
+      return;
+    }
+
+    try {
+      setError("");
+      const updated = reanalyzeSessionWithCalibration(reviewSession.session, calibration);
+      const saved = await window.voiceCoach.updateSession({ session: updated });
+      const savedSessions = await window.voiceCoach.listSessions();
+      setReviewSession(saved);
+      setSessions(savedSessions);
+      setWarning("Session reanalyzed with current calibration");
+    } catch (reanalyzeError) {
+      setError(formatError(reanalyzeError));
+    }
   }
 
   const calibrationPercent = Math.min(100, Math.round((calibrationProgressMs / CALIBRATION_TOTAL_MS) * 100));
@@ -389,7 +466,15 @@ export function App() {
           />
         )}
 
-        {screen === "review" && <ReviewScreen session={reviewSession} sessions={sessions} onOpenSession={openSession} />}
+        {screen === "review" && (
+          <ReviewScreen
+            calibration={calibration}
+            session={reviewSession}
+            sessions={sessions}
+            onOpenSession={openSession}
+            onReanalyzeSession={reanalyzeReviewSession}
+          />
+        )}
 
         {screen === "settings" && (
           <SettingsScreen
@@ -582,14 +667,23 @@ function PracticeScreen({
 }
 
 function ReviewScreen({
+  calibration,
   onOpenSession,
+  onReanalyzeSession,
   session,
   sessions
 }: {
+  calibration: CalibrationProfile | null;
   onOpenSession: (session: SavedSession) => void;
+  onReanalyzeSession: () => void;
   session: SavedSession | null;
   sessions: SavedSession[];
 }) {
+  const hasCalibrationGap = Boolean(session && session.session.calibrationId === null);
+  const hasCalibrationMismatch = Boolean(
+    session?.session.calibrationId && calibration && session.session.calibrationId !== calibration.id
+  );
+
   return (
     <section className="screen">
       <header className="screen-header compact">
@@ -602,6 +696,24 @@ function ReviewScreen({
       {session ? (
         <>
           <section className="panel">
+            {hasCalibrationGap && (
+              <div className="inline-warning">
+                <AlertTriangle size={18} />
+                <span>This session was recorded without calibration, so its review metrics may be incomplete.</span>
+                <button className="secondary-button compact-button" onClick={onReanalyzeSession} disabled={!calibration}>
+                  <RotateCcw size={16} /> Reanalyze
+                </button>
+              </div>
+            )}
+            {hasCalibrationMismatch && (
+              <div className="inline-warning subtle">
+                <AlertTriangle size={18} />
+                <span>This session used a different calibration profile than the current one.</span>
+                <button className="secondary-button compact-button" onClick={onReanalyzeSession}>
+                  <RotateCcw size={16} /> Reanalyze
+                </button>
+              </div>
+            )}
             <div className="audio-row">
               <Play size={18} />
               <audio controls src={session.recordingUrl} />
