@@ -9,7 +9,30 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.3.x`: transcript and local suggestions
 - `0.4.x`: Coach Mode and product polish
 - `0.5.x`: Progress Coach and assisted transcript entry
+- `0.6.x`: camera sessions and built-in transcription
 - `1.0.0`: stable public release
+
+## 0.6.0 - 2026-05-26
+
+Added:
+
+- camera-plus-microphone practice sessions with live preview
+- camera selector, resolution, frame-rate, and mirror-preview controls
+- video review playback for camera sessions
+- built-in Windows `System.Speech` transcription provider launched from the app
+- live transcript preview during recording
+- automatic final transcript save as `windows_builtin`
+- camera metadata and `recordingKind` fields in session JSON
+
+Changed:
+
+- README now presents the project as the `0.6.0` Camera Sessions and Built-in Transcription release
+- transcript report headings now use the broader `Transcript` label instead of `Manual Transcript`
+- review summary now identifies audio-only vs camera sessions
+
+Tests:
+
+- added coverage for camera media constraints, video session schema, and built-in transcript source validation
 
 ## 0.5.0 - 2026-05-26
 

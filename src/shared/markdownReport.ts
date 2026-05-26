@@ -14,6 +14,7 @@ export function buildMarkdownReport(
     `Created: ${session.createdAt}`,
     `Duration: ${formatMs(session.durationMs)}`,
     `Calibration: ${session.calibrationId ?? "none"}`,
+    `Recording: ${(session.recordingKind ?? "audio") === "video" ? "camera + microphone" : "audio only"}`,
     ""
   ];
 
@@ -92,7 +93,7 @@ export function buildMarkdownReport(
   }
 
   if (transcript?.text.trim()) {
-    lines.push("## Manual Transcript", "", transcript.text.trim(), "");
+    lines.push("## Transcript", "", `Source: ${formatTranscriptSource(transcript.source)}`, "", transcript.text.trim(), "");
   }
 
   if (textSuggestions) {
@@ -117,6 +118,18 @@ export function buildMarkdownReport(
   }
 
   return `${lines.join("\n")}\n`;
+}
+
+function formatTranscriptSource(source: TranscriptDocument["source"]): string {
+  if (source === "windows_builtin") {
+    return "Built-in Windows speech";
+  }
+
+  if (source === "windows_dictation") {
+    return "Windows speech input";
+  }
+
+  return "Manual";
 }
 
 function formatMs(ms: number): string {

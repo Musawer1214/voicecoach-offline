@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { CoachReport, VoiceCoachSession, isCoachReport, isVoiceCoachSession } from "./types";
+import {
+  CoachReport,
+  TranscriptDocument,
+  VoiceCoachSession,
+  isCoachReport,
+  isTranscriptDocument,
+  isVoiceCoachSession
+} from "./types";
 
 describe("VoiceCoach session schema", () => {
   it("validates required schemaVersion 1 fields", () => {
@@ -23,6 +30,45 @@ describe("VoiceCoach session schema", () => {
 
     expect(isVoiceCoachSession(session)).toBe(true);
     expect(isVoiceCoachSession({ ...session, schemaVersion: 2 })).toBe(false);
+  });
+
+  it("accepts video sessions and built-in transcription documents", () => {
+    const session: VoiceCoachSession = {
+      schemaVersion: 1,
+      id: "session-video-1",
+      createdAt: "2026-05-26T00:00:00.000Z",
+      durationMs: 3000,
+      deviceId: "device-1",
+      calibrationId: null,
+      recordingFile: "recording.webm",
+      recordingKind: "video",
+      cameraDeviceId: "camera-1",
+      cameraSettings: {
+        resolution: "1280x720",
+        frameRate: 30,
+        mirrored: true
+      },
+      samples: [],
+      events: [],
+      summary: {
+        targetVolumePercent: 0,
+        lowVolumeEventCount: 0,
+        longestLowVolumeMs: 0,
+        silenceEventCount: 0
+      }
+    };
+
+    expect(isVoiceCoachSession(session)).toBe(true);
+
+    const transcript: TranscriptDocument = {
+      schemaVersion: 1,
+      sessionId: "session-video-1",
+      source: "windows_builtin",
+      text: "This was captured by the built-in recognizer.",
+      updatedAt: "2026-05-26T00:00:01.000Z"
+    };
+
+    expect(isTranscriptDocument(transcript)).toBe(true);
   });
 
   it("validates coach report schemaVersion 1 fields", () => {

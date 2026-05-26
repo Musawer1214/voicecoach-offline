@@ -16,7 +16,9 @@ describe("markdown report export", () => {
     expect(markdown).toContain("## Coach Mode");
     expect(markdown).toContain("Readiness score: 84/100");
     expect(markdown).toContain("## Audio Report");
-    expect(markdown).toContain("## Manual Transcript");
+    expect(markdown).toContain("Recording: audio only");
+    expect(markdown).toContain("## Transcript");
+    expect(markdown).toContain("Source: Manual");
     expect(markdown).toContain("This is my transcript.");
     expect(markdown).toContain("## Transcript Suggestions");
     expect(markdown).toContain("Reduce filler words");

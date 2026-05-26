@@ -2,6 +2,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Camera,
   Download,
   ExternalLink,
   FileText,
@@ -30,6 +31,7 @@ import {
   AppSettings,
   AudioReport,
   CalibrationProfile,
+  CameraResolution,
   CoachReport,
   LevelState,
   MicrophoneProcessingMode,
@@ -37,6 +39,7 @@ import {
   SavedSession,
   SessionMetadata,
   TranscriptDocument,
+  TranscriptionEvent,
   VoiceCoachSession,
   VolumeSample
 } from "../shared/types";
@@ -45,6 +48,7 @@ import { createCalibrationProfile } from "./audio/calibration";
 import {
   DEFAULT_MICROPHONE_PROCESSING_MODE,
   DEFAULT_REVIEW_PLAYBACK_GAIN,
+  buildCameraConstraints,
   buildMicrophoneConstraints,
   clampReviewPlaybackGain
 } from "./audio/constraints";
@@ -63,12 +67,16 @@ import { buildTextSuggestions } from "./text/suggestions";
 
 type Screen = "home" | "coach" | "progress" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
+type RecordingMode = "audio" | "video";
+type AutoTranscriptionState = "idle" | "starting" | "listening" | "unavailable" | "error";
 
 const CALIBRATION_TOTAL_MS = 23_000;
 const WARNING_LOW_MS = 1_500;
 const WARNING_COOLDOWN_MS = 5_000;
 const SAMPLE_INTERVAL_MS = 100;
 const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5];
+const CAMERA_RESOLUTIONS: CameraResolution[] = ["640x360", "1280x720", "1920x1080"];
+const CAMERA_FRAME_RATES = [15, 24, 30];
 
 const initialLevel = {
   db: -100,
@@ -81,7 +89,9 @@ export function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [meta, setMeta] = useState<AppMeta | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
+  const [selectedCameraId, setSelectedCameraId] = useState("");
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [calibration, setCalibration] = useState<CalibrationProfile | null>(null);
   const [sessions, setSessions] = useState<SavedSession[]>([]);
@@ -94,6 +104,14 @@ export function App() {
     DEFAULT_MICROPHONE_PROCESSING_MODE
   );
   const [reviewPlaybackGain, setReviewPlaybackGain] = useState(DEFAULT_REVIEW_PLAYBACK_GAIN);
+  const [recordingMode, setRecordingMode] = useState<RecordingMode>("video");
+  const [cameraResolution, setCameraResolution] = useState<CameraResolution>("1280x720");
+  const [cameraFrameRate, setCameraFrameRate] = useState(30);
+  const [cameraMirror, setCameraMirror] = useState(true);
+  const [autoTranscriptionEnabled, setAutoTranscriptionEnabled] = useState(true);
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
+  const [autoTranscriptionState, setAutoTranscriptionState] = useState<AutoTranscriptionState>("idle");
   const [level, setLevel] = useState(initialLevel);
   const [audioMode, setAudioMode] = useState<AudioMode>("idle");
   const [isRecording, setIsRecording] = useState(false);
@@ -102,6 +120,7 @@ export function App() {
   const [error, setError] = useState("");
 
   const streamRef = useRef<MediaStream | null>(null);
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const intervalRef = useRef<number | null>(null);
@@ -117,6 +136,9 @@ export function App() {
   const isRecordingRef = useRef(false);
   const warningRef = useRef("");
   const activeRecordingCalibrationRef = useRef<CalibrationProfile | null>(null);
+  const activeRecordingModeRef = useRef<RecordingMode>("audio");
+  const autoTranscriptFinalsRef = useRef<string[]>([]);
+  const autoTranscriptPartialRef = useRef("");
   const microphoneElapsedMsRef = useRef(0);
   const recordingStartedAtMsRef = useRef<number | null>(null);
   const recordingWallStartedAtRef = useRef<number | null>(null);
@@ -127,8 +149,19 @@ export function App() {
 
   useEffect(() => {
     void initializeApp();
-    return () => stopMicrophone();
+    const unsubscribe = window.voiceCoach.onTranscriptionEvent(handleTranscriptionEvent);
+    return () => {
+      unsubscribe();
+      void window.voiceCoach.stopTranscription();
+      stopMicrophone();
+    };
   }, []);
+
+  useEffect(() => {
+    if (previewVideoRef.current) {
+      previewVideoRef.current.srcObject = recordingMode === "video" ? streamRef.current : null;
+    }
+  }, [recordingMode, audioMode, selectedCameraId]);
 
   async function initializeApp() {
     try {
@@ -143,25 +176,38 @@ export function App() {
       setMicrophoneProcessingMode(savedSettings?.microphoneProcessingMode ?? DEFAULT_MICROPHONE_PROCESSING_MODE);
       setReviewPlaybackGain(clampReviewPlaybackGain(savedSettings?.reviewPlaybackGain ?? DEFAULT_REVIEW_PLAYBACK_GAIN));
       setSelectedDeviceId(savedSettings?.selectedDeviceId ?? "");
+      setSelectedCameraId(savedSettings?.selectedCameraId ?? "");
+      setRecordingMode(savedSettings?.cameraEnabled === false ? "audio" : "video");
+      setCameraResolution(savedSettings?.cameraResolution ?? "1280x720");
+      setCameraFrameRate(savedSettings?.cameraFrameRate ?? 30);
+      setCameraMirror(savedSettings?.cameraMirror ?? true);
+      setAutoTranscriptionEnabled(savedSettings?.autoTranscriptionEnabled ?? true);
       setCalibration(savedCalibration);
       setSessions(savedSessions);
-      await refreshDevices(false, savedSettings?.selectedDeviceId ?? "");
+      await refreshDevices(false, savedSettings?.selectedDeviceId ?? "", savedSettings?.selectedCameraId ?? "");
     } catch (appError) {
       setError(formatError(appError));
     }
   }
 
-  async function refreshDevices(requestPermission: boolean, preferredDeviceId = selectedDeviceId) {
+  async function refreshDevices(
+    requestPermission: boolean,
+    preferredDeviceId = selectedDeviceId,
+    preferredCameraId = selectedCameraId
+  ) {
     try {
       if (requestPermission) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
         stream.getTracks().forEach((track) => track.stop());
       }
 
       const availableDevices = await navigator.mediaDevices.enumerateDevices();
       const microphones = availableDevices.filter((device) => device.kind === "audioinput");
+      const videoInputs = availableDevices.filter((device) => device.kind === "videoinput");
       setDevices(microphones);
+      setCameras(videoInputs);
       setSelectedDeviceId((current) => preferredDeviceId || current || microphones[0]?.deviceId || "");
+      setSelectedCameraId((current) => preferredCameraId || current || videoInputs[0]?.deviceId || "");
     } catch (deviceError) {
       setError(formatError(deviceError));
     }
@@ -169,7 +215,17 @@ export function App() {
 
   async function selectDevice(deviceId: string) {
     setSelectedDeviceId(deviceId);
-    const nextSettings = buildAppSettings(deviceId, microphoneProcessingMode, reviewPlaybackGain);
+    const nextSettings = buildAppSettings({
+      deviceId,
+      cameraId: selectedCameraId,
+      processingMode: microphoneProcessingMode,
+      playbackGain: reviewPlaybackGain,
+      nextRecordingMode: recordingMode,
+      nextCameraResolution: cameraResolution,
+      nextCameraFrameRate: cameraFrameRate,
+      nextCameraMirror: cameraMirror,
+      nextAutoTranscriptionEnabled: autoTranscriptionEnabled
+    });
     setSettings(nextSettings);
     try {
       await window.voiceCoach.saveSettings(nextSettings);
@@ -180,7 +236,17 @@ export function App() {
 
   async function selectMicrophoneProcessingMode(mode: MicrophoneProcessingMode) {
     setMicrophoneProcessingMode(mode);
-    const nextSettings = buildAppSettings(selectedDeviceId, mode, reviewPlaybackGain);
+    const nextSettings = buildAppSettings({
+      deviceId: selectedDeviceId,
+      cameraId: selectedCameraId,
+      processingMode: mode,
+      playbackGain: reviewPlaybackGain,
+      nextRecordingMode: recordingMode,
+      nextCameraResolution: cameraResolution,
+      nextCameraFrameRate: cameraFrameRate,
+      nextCameraMirror: cameraMirror,
+      nextAutoTranscriptionEnabled: autoTranscriptionEnabled
+    });
     setSettings(nextSettings);
     try {
       await window.voiceCoach.saveSettings(nextSettings);
@@ -193,7 +259,17 @@ export function App() {
   async function updateReviewPlaybackGain(value: number) {
     const gain = clampReviewPlaybackGain(value);
     setReviewPlaybackGain(gain);
-    const nextSettings = buildAppSettings(selectedDeviceId, microphoneProcessingMode, gain);
+    const nextSettings = buildAppSettings({
+      deviceId: selectedDeviceId,
+      cameraId: selectedCameraId,
+      processingMode: microphoneProcessingMode,
+      playbackGain: gain,
+      nextRecordingMode: recordingMode,
+      nextCameraResolution: cameraResolution,
+      nextCameraFrameRate: cameraFrameRate,
+      nextCameraMirror: cameraMirror,
+      nextAutoTranscriptionEnabled: autoTranscriptionEnabled
+    });
     setSettings(nextSettings);
     try {
       await window.voiceCoach.saveSettings(nextSettings);
@@ -202,18 +278,99 @@ export function App() {
     }
   }
 
-  function buildAppSettings(
-    deviceId: string,
-    processingMode: MicrophoneProcessingMode,
-    playbackGain: number
-  ): AppSettings {
+  async function selectCamera(cameraId: string) {
+    setSelectedCameraId(cameraId);
+    await saveCaptureSettings({ cameraId });
+  }
+
+  async function updateRecordingMode(mode: RecordingMode) {
+    setRecordingMode(mode);
+    await saveCaptureSettings({ nextRecordingMode: mode });
+  }
+
+  async function updateCameraResolution(resolution: CameraResolution) {
+    setCameraResolution(resolution);
+    await saveCaptureSettings({ nextCameraResolution: resolution });
+  }
+
+  async function updateCameraFrameRate(frameRate: number) {
+    setCameraFrameRate(frameRate);
+    await saveCaptureSettings({ nextCameraFrameRate: frameRate });
+  }
+
+  async function updateCameraMirror(mirrored: boolean) {
+    setCameraMirror(mirrored);
+    await saveCaptureSettings({ nextCameraMirror: mirrored });
+  }
+
+  async function updateAutoTranscriptionEnabled(enabled: boolean) {
+    setAutoTranscriptionEnabled(enabled);
+    await saveCaptureSettings({ nextAutoTranscriptionEnabled: enabled });
+  }
+
+  async function saveCaptureSettings(overrides: {
+    cameraId?: string;
+    nextRecordingMode?: RecordingMode;
+    nextCameraResolution?: CameraResolution;
+    nextCameraFrameRate?: number;
+    nextCameraMirror?: boolean;
+    nextAutoTranscriptionEnabled?: boolean;
+  }) {
+    const nextSettings = buildAppSettings({
+      deviceId: selectedDeviceId,
+      cameraId: overrides.cameraId ?? selectedCameraId,
+      processingMode: microphoneProcessingMode,
+      playbackGain: reviewPlaybackGain,
+      nextRecordingMode: overrides.nextRecordingMode ?? recordingMode,
+      nextCameraResolution: overrides.nextCameraResolution ?? cameraResolution,
+      nextCameraFrameRate: overrides.nextCameraFrameRate ?? cameraFrameRate,
+      nextCameraMirror: overrides.nextCameraMirror ?? cameraMirror,
+      nextAutoTranscriptionEnabled: overrides.nextAutoTranscriptionEnabled ?? autoTranscriptionEnabled
+    });
+    setSettings(nextSettings);
+    try {
+      await window.voiceCoach.saveSettings(nextSettings);
+    } catch (settingsError) {
+      setError(formatError(settingsError));
+    }
+  }
+
+  function buildAppSettings({
+    cameraId,
+    deviceId,
+    nextAutoTranscriptionEnabled,
+    nextCameraFrameRate,
+    nextCameraMirror,
+    nextCameraResolution,
+    nextRecordingMode,
+    playbackGain,
+    processingMode
+  }: {
+    cameraId: string;
+    deviceId: string;
+    nextAutoTranscriptionEnabled: boolean;
+    nextCameraFrameRate: number;
+    nextCameraMirror: boolean;
+    nextCameraResolution: CameraResolution;
+    nextRecordingMode: RecordingMode;
+    playbackGain: number;
+    processingMode: MicrophoneProcessingMode;
+  }): AppSettings {
     const device = devices.find((item) => item.deviceId === deviceId);
+    const camera = cameras.find((item) => item.deviceId === cameraId);
     return {
       schemaVersion: 1,
       selectedDeviceId: deviceId,
       selectedDeviceLabel: device?.label || "Default microphone",
+      selectedCameraId: cameraId,
+      selectedCameraLabel: camera?.label || "Default camera",
       microphoneProcessingMode: processingMode,
       reviewPlaybackGain: clampReviewPlaybackGain(playbackGain),
+      cameraEnabled: nextRecordingMode === "video",
+      cameraResolution: nextCameraResolution,
+      cameraFrameRate: nextCameraFrameRate,
+      cameraMirror: nextCameraMirror,
+      autoTranscriptionEnabled: nextAutoTranscriptionEnabled,
       updatedAt: new Date().toISOString()
     };
   }
@@ -280,11 +437,29 @@ export function App() {
     practiceSamplesRef.current = [];
     lowStartedAtRef.current = null;
     lastWarningAtRef.current = -Infinity;
+    autoTranscriptFinalsRef.current = [];
+    autoTranscriptPartialRef.current = "";
+    setLiveTranscript("");
+    setPartialTranscript("");
+    setAutoTranscriptionState(autoTranscriptionEnabled ? "starting" : "idle");
     recordingStartedAtMsRef.current = microphoneElapsedMsRef.current;
     recordingWallStartedAtRef.current = performance.now();
     activeRecordingCalibrationRef.current = calibrationRef.current;
+    activeRecordingModeRef.current = recordingMode;
 
-    const recorder = new MediaRecorder(streamRef.current, preferredRecorderOptions());
+    if (autoTranscriptionEnabled) {
+      try {
+        await window.voiceCoach.startTranscription({ provider: "windows_system_speech", culture: "en-US" });
+      } catch (transcriptionError) {
+        setAutoTranscriptionState("error");
+        setWarning(`Built-in transcription could not start: ${formatError(transcriptionError)}`);
+      }
+    }
+
+    const recorder = new MediaRecorder(
+      streamRef.current,
+      preferredRecorderOptions(recordingMode === "video" && streamRef.current.getVideoTracks().length > 0)
+    );
     recorderRef.current = recorder;
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) {
@@ -308,9 +483,18 @@ export function App() {
     }
 
     const recordingBlob = await new Promise<Blob>((resolve) => {
-      recorder.onstop = () => resolve(new Blob(chunksRef.current, { type: "audio/webm" }));
+      recorder.onstop = () =>
+        resolve(
+          new Blob(chunksRef.current, {
+            type: activeRecordingModeRef.current === "video" ? "video/webm" : "audio/webm"
+          })
+        );
       recorder.stop();
     });
+
+    if (autoTranscriptionEnabled) {
+      await window.voiceCoach.stopTranscription();
+    }
 
     setIsRecording(false);
     isRecordingRef.current = false;
@@ -332,12 +516,37 @@ export function App() {
       calibrationSnapshot: calibrationForSession,
       metadata,
       recordingFile: "recording.webm",
+      recordingKind: activeRecordingModeRef.current,
+      cameraDeviceId: activeRecordingModeRef.current === "video" ? selectedCameraId : undefined,
+      cameraDeviceLabel:
+        activeRecordingModeRef.current === "video"
+          ? cameras.find((item) => item.deviceId === selectedCameraId)?.label || "Default camera"
+          : undefined,
+      cameraSettings:
+        activeRecordingModeRef.current === "video"
+          ? {
+              resolution: cameraResolution,
+              frameRate: cameraFrameRate,
+              mirrored: cameraMirror
+            }
+          : undefined,
       samples,
       events,
       summary: buildSessionSummary(samples, events, calibrationForSession)
     };
     const report = buildAudioReport(session, calibrationForSession);
-    const coachReport = buildCoachReport(session, report, null, practiceGoalId);
+    const finalTranscript = buildFinalAutoTranscript();
+    const transcript = finalTranscript
+      ? {
+          schemaVersion: 1 as const,
+          sessionId: session.id,
+          source: "windows_builtin" as const,
+          text: finalTranscript,
+          updatedAt: new Date().toISOString()
+        }
+      : null;
+    const textSuggestions = transcript ? buildTextSuggestions(session.id, transcript.text) : null;
+    const coachReport = buildCoachReport(session, report, textSuggestions, practiceGoalId);
     activeRecordingCalibrationRef.current = null;
     recordingStartedAtMsRef.current = null;
     recordingWallStartedAtRef.current = null;
@@ -349,14 +558,27 @@ export function App() {
         coachReport,
         recordingData: await recordingBlob.arrayBuffer()
       });
+      let savedWithTranscript = saved;
+      if (transcript && textSuggestions) {
+        savedWithTranscript = await window.voiceCoach.saveTranscript({
+          sessionId: session.id,
+          transcript,
+          textSuggestions
+        });
+        savedWithTranscript = await window.voiceCoach.saveCoachReport({
+          sessionId: session.id,
+          coachReport
+        });
+      }
       const savedSessions = await window.voiceCoach.listSessions();
       setSessions(savedSessions);
-      setReviewSession(saved);
+      setReviewSession(savedWithTranscript);
       setScreen("review");
       setPracticeTitle("");
       setPracticePrompt("");
       setPracticeNotes("");
       stopMicrophone();
+      setAutoTranscriptionState("idle");
     } catch (saveError) {
       setError(formatError(saveError));
     }
@@ -402,19 +624,76 @@ export function App() {
     }
   }
 
+  function handleTranscriptionEvent(event: TranscriptionEvent) {
+    if (event.type === "ready") {
+      setAutoTranscriptionState("listening");
+      return;
+    }
+
+    if (event.type === "partial") {
+      autoTranscriptPartialRef.current = event.text;
+      setPartialTranscript(event.text);
+      return;
+    }
+
+    if (event.type === "final") {
+      const cleaned = event.text.trim();
+      if (cleaned) {
+        autoTranscriptFinalsRef.current = [...autoTranscriptFinalsRef.current, cleaned];
+        const nextText = autoTranscriptFinalsRef.current.join(" ");
+        setLiveTranscript(nextText);
+      }
+      autoTranscriptPartialRef.current = "";
+      setPartialTranscript("");
+      return;
+    }
+
+    if (event.type === "error") {
+      setAutoTranscriptionState("error");
+      setWarning(`Built-in transcription error: ${event.message}`);
+      return;
+    }
+
+    if (event.type === "stopped" && autoTranscriptionState !== "error") {
+      setAutoTranscriptionState("idle");
+    }
+  }
+
+  function buildFinalAutoTranscript(): string {
+    return [...autoTranscriptFinalsRef.current, autoTranscriptPartialRef.current]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   async function startMicrophone(mode: AudioMode, onSample: (db: number, rms: number, elapsedMs: number) => void) {
     stopMicrophone();
     await refreshDevices(false);
 
-    const constraints = buildMicrophoneConstraints(selectedDeviceId, microphoneProcessingMode);
+    const constraints =
+      mode === "practice" && recordingMode === "video"
+        ? buildCameraConstraints({
+            cameraDeviceId: selectedCameraId,
+            frameRate: cameraFrameRate,
+            microphoneDeviceId: selectedDeviceId,
+            processingMode: microphoneProcessingMode,
+            resolution: cameraResolution
+          })
+        : buildMicrophoneConstraints(selectedDeviceId, microphoneProcessingMode);
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
+    const audioStream = new MediaStream(stream.getAudioTracks());
+    const source = audioContext.createMediaStreamSource(audioStream);
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 2048;
     source.connect(analyser);
 
     streamRef.current = stream;
+    if (previewVideoRef.current) {
+      previewVideoRef.current.srcObject = mode === "practice" && recordingMode === "video" ? stream : null;
+    }
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
     setAudioMode(mode);
@@ -440,6 +719,9 @@ export function App() {
 
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (previewVideoRef.current) {
+      previewVideoRef.current.srcObject = null;
+    }
     void audioContextRef.current?.close();
     audioContextRef.current = null;
     analyserRef.current = null;
@@ -633,7 +915,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.5.0"}</span>
+            <span>v{meta?.version ?? "0.6.0"}</span>
           </div>
         </div>
 
@@ -677,6 +959,8 @@ export function App() {
             onStartPractice={preparePractice}
             onStartCalibration={startCalibration}
             onOpenSession={openSession}
+            recordingMode={recordingMode}
+            autoTranscriptionEnabled={autoTranscriptionEnabled}
           />
         )}
 
@@ -717,19 +1001,37 @@ export function App() {
 
         {screen === "practice" && (
           <PracticeScreen
+            autoTranscriptionEnabled={autoTranscriptionEnabled}
+            autoTranscriptionState={autoTranscriptionState}
+            cameraFrameRate={cameraFrameRate}
+            cameraMirror={cameraMirror}
+            cameraResolution={cameraResolution}
+            cameras={cameras}
             calibration={calibration}
             level={level}
             isRecording={isRecording}
+            liveTranscript={liveTranscript}
+            partialTranscript={partialTranscript}
             title={practiceTitle}
             prompt={practicePrompt}
             notes={practiceNotes}
+            onAutoTranscriptionEnabledChange={updateAutoTranscriptionEnabled}
+            onCameraFrameRateChange={updateCameraFrameRate}
+            onCameraMirrorChange={updateCameraMirror}
+            onCameraResolutionChange={updateCameraResolution}
             onChangeTitle={setPracticeTitle}
             onChangePrompt={setPracticePrompt}
             onChangeNotes={setPracticeNotes}
             onGoalChange={setPracticeGoalId}
+            onRefreshDevices={() => refreshDevices(true)}
+            onRecordingModeChange={updateRecordingMode}
+            onSelectCamera={selectCamera}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
             onStartCalibration={startCalibration}
+            previewVideoRef={previewVideoRef}
+            recordingMode={recordingMode}
+            selectedCameraId={selectedCameraId}
             goalId={practiceGoalId}
           />
         )}
@@ -754,10 +1056,17 @@ export function App() {
 
         {screen === "settings" && (
           <SettingsScreen
+            autoTranscriptionEnabled={autoTranscriptionEnabled}
+            cameraFrameRate={cameraFrameRate}
+            cameraMirror={cameraMirror}
+            cameraResolution={cameraResolution}
+            cameras={cameras}
             meta={meta}
             devices={devices}
             selectedDeviceId={selectedDeviceId}
+            selectedCameraId={selectedCameraId}
             onSelectDevice={selectDevice}
+            onSelectCamera={selectCamera}
             onRefreshDevices={() => refreshDevices(true)}
             calibration={calibration}
             settings={settings}
@@ -765,6 +1074,10 @@ export function App() {
             onSelectMicrophoneProcessingMode={selectMicrophoneProcessingMode}
             reviewPlaybackGain={reviewPlaybackGain}
             onReviewPlaybackGainChange={updateReviewPlaybackGain}
+            onAutoTranscriptionEnabledChange={updateAutoTranscriptionEnabled}
+            onCameraFrameRateChange={updateCameraFrameRate}
+            onCameraMirrorChange={updateCameraMirror}
+            onCameraResolutionChange={updateCameraResolution}
           />
         )}
       </main>
@@ -792,13 +1105,17 @@ function NavButton({
 }
 
 function HomeScreen({
+  autoTranscriptionEnabled,
   calibration,
   sessions,
+  recordingMode,
   onStartPractice,
   onStartCalibration,
   onOpenSession
 }: {
+  autoTranscriptionEnabled: boolean;
   calibration: CalibrationProfile | null;
+  recordingMode: RecordingMode;
   sessions: SavedSession[];
   onStartPractice: () => void;
   onStartCalibration: () => void;
@@ -809,7 +1126,7 @@ function HomeScreen({
       <header className="screen-header">
         <div>
           <h1>Practice speaking at a stronger, steadier volume</h1>
-          <p>Offline audio coaching with calibration, live feedback, and local review.</p>
+          <p>Offline audio, camera practice, built-in transcription, and local review.</p>
         </div>
         <div className="header-actions">
           <button className="secondary-button" onClick={onStartCalibration}>
@@ -824,11 +1141,24 @@ function HomeScreen({
       <div className="dashboard-grid">
         <Metric label="Calibration" value={calibration ? "Ready" : "Needed"} />
         <Metric label="Target Minimum" value={calibration ? `${calibration.targetMinDb} dB` : "--"} />
+        <Metric label="Recording" value={recordingMode === "video" ? "Camera + mic" : "Audio only"} />
+        <Metric label="Transcription" value={autoTranscriptionEnabled ? "Built in" : "Off"} />
+      </div>
+
+      <div className="dashboard-grid">
         <Metric
           label="Coach Average"
           value={formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore))}
         />
         <Metric label="Recent Sessions" value={String(sessions.length)} />
+        <Metric
+          label="Video Sessions"
+          value={String(sessions.filter((session) => session.session.recordingKind === "video").length)}
+        />
+        <Metric
+          label="Auto Transcripts"
+          value={String(sessions.filter((session) => session.transcript?.source === "windows_builtin").length)}
+        />
       </div>
 
       <section className="panel">
@@ -1218,36 +1548,78 @@ function CalibrationScreen({
 }
 
 function PracticeScreen({
+  autoTranscriptionEnabled,
+  autoTranscriptionState,
+  cameraFrameRate,
+  cameraMirror,
+  cameraResolution,
+  cameras,
   calibration,
   goalId,
   isRecording,
   level,
+  liveTranscript,
   notes,
+  onAutoTranscriptionEnabledChange,
+  onCameraFrameRateChange,
+  onCameraMirrorChange,
+  onCameraResolutionChange,
   onChangeNotes,
   onChangePrompt,
   onChangeTitle,
   onGoalChange,
+  onRefreshDevices,
+  onRecordingModeChange,
+  onSelectCamera,
   onStartCalibration,
   onStartRecording,
   onStopRecording,
+  partialTranscript,
+  previewVideoRef,
   prompt,
+  recordingMode,
+  selectedCameraId,
   title
 }: {
+  autoTranscriptionEnabled: boolean;
+  autoTranscriptionState: AutoTranscriptionState;
+  cameraFrameRate: number;
+  cameraMirror: boolean;
+  cameraResolution: CameraResolution;
+  cameras: MediaDeviceInfo[];
   calibration: CalibrationProfile | null;
   goalId: PracticeGoalId;
   isRecording: boolean;
   level: typeof initialLevel;
+  liveTranscript: string;
   notes: string;
+  onAutoTranscriptionEnabledChange: (enabled: boolean) => void;
+  onCameraFrameRateChange: (frameRate: number) => void;
+  onCameraMirrorChange: (mirrored: boolean) => void;
+  onCameraResolutionChange: (resolution: CameraResolution) => void;
   onChangeNotes: (value: string) => void;
   onChangePrompt: (value: string) => void;
   onChangeTitle: (value: string) => void;
   onGoalChange: (goalId: PracticeGoalId) => void;
+  onRefreshDevices: () => void;
+  onRecordingModeChange: (mode: RecordingMode) => void;
+  onSelectCamera: (id: string) => void;
   onStartCalibration: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  partialTranscript: string;
+  previewVideoRef: React.RefObject<HTMLVideoElement | null>;
   prompt: string;
+  recordingMode: RecordingMode;
+  selectedCameraId: string;
   title: string;
 }) {
+  const transcriptPreview =
+    [liveTranscript, partialTranscript].filter(Boolean).join(" ").trim() ||
+    (autoTranscriptionEnabled
+      ? "Built-in transcription will appear here while you speak."
+      : "Turn on built-in transcription to capture text during practice.");
+
   return (
     <section className="screen">
       <header className="screen-header compact">
@@ -1263,6 +1635,103 @@ function PracticeScreen({
       </header>
 
       <GoalSelector activeGoalId={goalId} disabled={isRecording} onChange={onGoalChange} />
+
+      <section className="panel capture-settings-panel">
+        <div className="panel-title">
+          <Camera size={18} />
+          <h2>Camera and Transcription</h2>
+        </div>
+        <div className="capture-grid">
+          <div className="processing-control">
+            <div>
+              <strong>Recording mode</strong>
+              <span>Record audio only, or save camera and microphone together in the local session file.</span>
+            </div>
+            <div className="segmented-control">
+              <button
+                className={recordingMode === "video" ? "active" : ""}
+                disabled={isRecording}
+                onClick={() => onRecordingModeChange("video")}
+              >
+                Camera
+              </button>
+              <button
+                className={recordingMode === "audio" ? "active" : ""}
+                disabled={isRecording}
+                onClick={() => onRecordingModeChange("audio")}
+              >
+                Audio
+              </button>
+            </div>
+          </div>
+          <div className="processing-control">
+            <div>
+              <strong>Built-in transcription</strong>
+              <span>Uses the Windows local speech recognizer when available and saves final text after recording.</span>
+            </div>
+            <label className="toggle-control">
+              <input
+                type="checkbox"
+                checked={autoTranscriptionEnabled}
+                disabled={isRecording}
+                onChange={(event) => onAutoTranscriptionEnabledChange(event.target.checked)}
+              />
+              <span>{autoTranscriptionEnabled ? "On" : "Off"}</span>
+            </label>
+          </div>
+        </div>
+
+        {recordingMode === "video" && (
+          <>
+            <CameraPicker
+              cameras={cameras}
+              disabled={isRecording}
+              onRefreshDevices={onRefreshDevices}
+              onSelectCamera={onSelectCamera}
+              selectedCameraId={selectedCameraId}
+            />
+            <div className="camera-options">
+              <label>
+                Resolution
+                <select
+                  value={cameraResolution}
+                  disabled={isRecording}
+                  onChange={(event) => onCameraResolutionChange(event.target.value as CameraResolution)}
+                >
+                  {CAMERA_RESOLUTIONS.map((resolution) => (
+                    <option key={resolution} value={resolution}>
+                      {resolution}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Frame rate
+                <select
+                  value={cameraFrameRate}
+                  disabled={isRecording}
+                  onChange={(event) => onCameraFrameRateChange(Number(event.target.value))}
+                >
+                  {CAMERA_FRAME_RATES.map((rate) => (
+                    <option key={rate} value={rate}>
+                      {rate} fps
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="toggle-control inline">
+                <input
+                  type="checkbox"
+                  checked={cameraMirror}
+                  disabled={isRecording}
+                  onChange={(event) => onCameraMirrorChange(event.target.checked)}
+                />
+                <span>Mirror preview</span>
+              </label>
+            </div>
+          </>
+        )}
+      </section>
 
       <section className="panel session-setup-panel">
         <label>
@@ -1295,8 +1764,27 @@ function PracticeScreen({
       </section>
 
       <section className="practice-surface">
+        {recordingMode === "video" && (
+          <div className="camera-preview-shell">
+            <video
+              ref={previewVideoRef}
+              autoPlay
+              muted
+              playsInline
+              className={cameraMirror ? "mirrored" : ""}
+            />
+            <span>{isRecording ? "Recording camera session" : "Camera preview starts when practice starts"}</span>
+          </div>
+        )}
         <VolumeMeter level={level} calibration={calibration} large />
         <div className={`state-pill ${level.state}`}>{formatState(level.state)}</div>
+        <div className={`live-transcript ${autoTranscriptionState}`}>
+          <div>
+            <strong>Live transcript</strong>
+            <span>{formatTranscriptionState(autoTranscriptionState, autoTranscriptionEnabled)}</span>
+          </div>
+          <p>{transcriptPreview}</p>
+        </div>
         <div className="record-actions">
           {!isRecording ? (
             <button className="primary-button large-button" onClick={onStartRecording}>
@@ -1313,7 +1801,7 @@ function PracticeScreen({
   );
 }
 
-type ReviewAudioPlayerHandle = {
+type ReviewMediaPlayerHandle = {
   seekAndPlay: (ms: number) => void;
 };
 
@@ -1346,7 +1834,7 @@ function ReviewScreen({
   session: SavedSession | null;
   sessions: SavedSession[];
 }) {
-  const audioPlayerRef = useRef<ReviewAudioPlayerHandle | null>(null);
+  const mediaPlayerRef = useRef<ReviewMediaPlayerHandle | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
@@ -1381,7 +1869,7 @@ function ReviewScreen({
   }
 
   function seekAudio(ms: number) {
-    audioPlayerRef.current?.seekAndPlay(ms);
+    mediaPlayerRef.current?.seekAndPlay(ms);
   }
 
   function saveTranscript() {
@@ -1450,8 +1938,10 @@ function ReviewScreen({
                 </button>
               </div>
             )}
-            <ReviewAudioPlayer
-              ref={audioPlayerRef}
+            <ReviewMediaPlayer
+              ref={mediaPlayerRef}
+              kind={session.session.recordingKind ?? "audio"}
+              mirrored={session.session.cameraSettings?.mirrored ?? false}
               src={session.recordingUrl}
               playbackGain={playbackGain}
               onPlaybackGainChange={onPlaybackGainChange}
@@ -1459,9 +1949,13 @@ function ReviewScreen({
             <Timeline session={session.session} onSeek={seekAudio} />
             <div className="dashboard-grid">
               <Metric label="Duration" value={formatMs(session.session.durationMs)} />
+              <Metric
+                label="Recording"
+                value={(session.session.recordingKind ?? "audio") === "video" ? "Camera + mic" : "Audio only"}
+              />
               <Metric label="Target Time" value={`${session.session.summary.targetVolumePercent}%`} />
               <Metric label="Low Events" value={String(session.session.summary.lowVolumeEventCount)} />
-              <Metric label="Silence Events" value={String(session.session.summary.silenceEventCount)} />
+              <Metric label="Transcript" value={formatTranscriptSource(session.transcript?.source)} />
             </div>
             {session.coachReport && <CoachReportPanel report={session.coachReport} onSeek={seekAudio} />}
             {session.report && <AudioReportPanel report={session.report} onSeek={seekAudio} />}
@@ -1491,7 +1985,7 @@ function ReviewScreen({
             <section className="transcript-panel">
               <div className="panel-title">
                 <FileText size={18} />
-                <h2>Manual Transcript</h2>
+                <h2>Transcript</h2>
               </div>
               <div className="dictation-helper">
                 <div>
@@ -1511,9 +2005,7 @@ function ReviewScreen({
                 placeholder="Paste or type the transcript here. VoiceCoach will run local grammar and clarity checks."
               />
               <div className="row-actions">
-                <span className="source-pill">
-                  Source: {draftTranscriptSource === "windows_dictation" ? "Windows speech input" : "Manual"}
-                </span>
+                <span className="source-pill">Source: {formatTranscriptSource(draftTranscriptSource)}</span>
                 <button className="secondary-button compact-button" onClick={saveTranscript}>
                   <Save size={16} /> Save and Analyze
                 </button>
@@ -1538,15 +2030,17 @@ function ReviewScreen({
   );
 }
 
-const ReviewAudioPlayer = forwardRef<
-  ReviewAudioPlayerHandle,
+const ReviewMediaPlayer = forwardRef<
+  ReviewMediaPlayerHandle,
   {
+    kind: RecordingMode;
+    mirrored: boolean;
     onPlaybackGainChange: (gain: number) => void;
     playbackGain: number;
     src: string;
   }
->(function ReviewAudioPlayer({ onPlaybackGainChange, playbackGain, src }, ref) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+>(function ReviewMediaPlayer({ kind, mirrored, onPlaybackGainChange, playbackGain, src }, ref) {
+  const mediaRef = useRef<HTMLMediaElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
@@ -1558,23 +2052,23 @@ const ReviewAudioPlayer = forwardRef<
 
   useImperativeHandle(ref, () => ({
     seekAndPlay: (ms: number) => {
-      const audio = audioRef.current;
-      if (!audio) {
+      const media = mediaRef.current;
+      if (!media) {
         return;
       }
 
-      audio.currentTime = Math.max(0, Math.min(duration || Number.MAX_SAFE_INTEGER, ms / 1000));
-      void playAudio();
+      media.currentTime = Math.max(0, Math.min(duration || Number.MAX_SAFE_INTEGER, ms / 1000));
+      void playMedia();
     }
   }));
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) {
+    const media = mediaRef.current;
+    if (!media) {
       return;
     }
 
-    audio.playbackRate = playbackRate;
+    media.playbackRate = playbackRate;
   }, [playbackRate]);
 
   useEffect(() => {
@@ -1588,7 +2082,13 @@ const ReviewAudioPlayer = forwardRef<
     setDuration(0);
     setIsPlaying(false);
     setPlaybackError("");
-  }, [src]);
+    sourceRef.current?.disconnect();
+    gainRef.current?.disconnect();
+    void audioContextRef.current?.close();
+    sourceRef.current = null;
+    gainRef.current = null;
+    audioContextRef.current = null;
+  }, [kind, src]);
 
   useEffect(() => {
     return () => {
@@ -1599,15 +2099,15 @@ const ReviewAudioPlayer = forwardRef<
   }, []);
 
   async function ensureAudioGraph() {
-    const audio = audioRef.current;
-    if (!audio) {
+    const media = mediaRef.current;
+    if (!media) {
       return;
     }
 
     if (!audioContextRef.current) {
       const AudioContextClass = window.AudioContext;
       const audioContext = new AudioContextClass();
-      const source = audioContext.createMediaElementSource(audio);
+      const source = audioContext.createMediaElementSource(media);
       const gain = audioContext.createGain();
       source.connect(gain);
       gain.connect(audioContext.destination);
@@ -1622,56 +2122,78 @@ const ReviewAudioPlayer = forwardRef<
     }
   }
 
-  async function playAudio() {
-    const audio = audioRef.current;
-    if (!audio) {
+  async function playMedia() {
+    const media = mediaRef.current;
+    if (!media) {
       return;
     }
 
     try {
       setPlaybackError("");
       await ensureAudioGraph();
-      await audio.play();
+      await media.play();
     } catch (error) {
       setPlaybackError(formatError(error));
     }
   }
 
   function togglePlayback() {
-    const audio = audioRef.current;
-    if (!audio) {
+    const media = mediaRef.current;
+    if (!media) {
       return;
     }
 
-    if (audio.paused) {
-      void playAudio();
+    if (media.paused) {
+      void playMedia();
     } else {
-      audio.pause();
+      media.pause();
     }
   }
 
   function seek(value: number) {
-    const audio = audioRef.current;
-    if (!audio) {
+    const media = mediaRef.current;
+    if (!media) {
       return;
     }
 
-    audio.currentTime = value;
+    media.currentTime = value;
     setCurrentTime(value);
   }
 
+  function bindMediaRef(element: HTMLAudioElement | HTMLVideoElement | null) {
+    mediaRef.current = element;
+  }
+
   return (
-    <div className="review-player">
-      <audio
-        ref={audioRef}
-        preload="metadata"
-        src={src}
-        onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
-        onEnded={() => setIsPlaying(false)}
-        onPause={() => setIsPlaying(false)}
-        onPlay={() => setIsPlaying(true)}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-      />
+    <div className={`review-player ${kind === "video" ? "video-player" : ""}`}>
+      {kind === "video" ? (
+        <video
+          ref={bindMediaRef}
+          preload="metadata"
+          src={src}
+          className={mirrored ? "mirrored" : ""}
+          onDurationChange={(event) =>
+            setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)
+          }
+          onEnded={() => setIsPlaying(false)}
+          onPause={() => setIsPlaying(false)}
+          onPlay={() => setIsPlaying(true)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        />
+      ) : (
+        <audio
+          ref={bindMediaRef}
+          preload="metadata"
+          src={src}
+          onDurationChange={(event) =>
+            setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)
+          }
+          onEnded={() => setIsPlaying(false)}
+          onPause={() => setIsPlaying(false)}
+          onPlay={() => setIsPlaying(true)}
+          onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        />
+      )}
       <div className="player-main-row">
         <button className="player-play-button" onClick={togglePlayback} title={isPlaying ? "Pause" : "Play"}>
           {isPlaying ? <Pause size={20} /> : <Play size={20} />}
@@ -1719,25 +2241,47 @@ const ReviewAudioPlayer = forwardRef<
 });
 
 function SettingsScreen({
+  autoTranscriptionEnabled,
   calibration,
+  cameraFrameRate,
+  cameraMirror,
+  cameraResolution,
+  cameras,
   devices,
   meta,
+  onAutoTranscriptionEnabledChange,
+  onCameraFrameRateChange,
+  onCameraMirrorChange,
+  onCameraResolutionChange,
   onRefreshDevices,
+  onSelectCamera,
   onSelectDevice,
   onSelectMicrophoneProcessingMode,
   onReviewPlaybackGainChange,
+  selectedCameraId,
   selectedDeviceId,
   microphoneProcessingMode,
   reviewPlaybackGain,
   settings
 }: {
+  autoTranscriptionEnabled: boolean;
   calibration: CalibrationProfile | null;
+  cameraFrameRate: number;
+  cameraMirror: boolean;
+  cameraResolution: CameraResolution;
+  cameras: MediaDeviceInfo[];
   devices: MediaDeviceInfo[];
   meta: AppMeta | null;
+  onAutoTranscriptionEnabledChange: (enabled: boolean) => void;
+  onCameraFrameRateChange: (frameRate: number) => void;
+  onCameraMirrorChange: (mirrored: boolean) => void;
+  onCameraResolutionChange: (resolution: CameraResolution) => void;
   onRefreshDevices: () => void;
+  onSelectCamera: (id: string) => void;
   onSelectDevice: (id: string) => void;
   onSelectMicrophoneProcessingMode: (mode: MicrophoneProcessingMode) => void;
   onReviewPlaybackGainChange: (gain: number) => void;
+  selectedCameraId: string;
   selectedDeviceId: string;
   microphoneProcessingMode: MicrophoneProcessingMode;
   reviewPlaybackGain: number;
@@ -1760,6 +2304,53 @@ function SettingsScreen({
           onRefreshDevices={onRefreshDevices}
         />
         <AudioProcessingControl mode={microphoneProcessingMode} onChange={onSelectMicrophoneProcessingMode} />
+        <CameraPicker
+          cameras={cameras}
+          selectedCameraId={selectedCameraId}
+          onSelectCamera={onSelectCamera}
+          onRefreshDevices={onRefreshDevices}
+        />
+        <div className="camera-options">
+          <label>
+            Camera resolution
+            <select
+              value={cameraResolution}
+              onChange={(event) => onCameraResolutionChange(event.target.value as CameraResolution)}
+            >
+              {CAMERA_RESOLUTIONS.map((resolution) => (
+                <option key={resolution} value={resolution}>
+                  {resolution}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Camera frame rate
+            <select value={cameraFrameRate} onChange={(event) => onCameraFrameRateChange(Number(event.target.value))}>
+              {CAMERA_FRAME_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate} fps
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="toggle-control inline">
+            <input
+              type="checkbox"
+              checked={cameraMirror}
+              onChange={(event) => onCameraMirrorChange(event.target.checked)}
+            />
+            <span>Mirror camera preview</span>
+          </label>
+          <label className="toggle-control inline">
+            <input
+              type="checkbox"
+              checked={autoTranscriptionEnabled}
+              onChange={(event) => onAutoTranscriptionEnabledChange(event.target.checked)}
+            />
+            <span>Start built-in transcription with recording</span>
+          </label>
+        </div>
         <label className="settings-slider">
           <span>Default review playback boost</span>
           <input
@@ -1777,7 +2368,9 @@ function SettingsScreen({
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
+          <Metric label="Selected Camera" value={settings?.selectedCameraLabel ?? "Not saved"} />
           <Metric label="Mic Processing" value={microphoneProcessingMode === "enhanced" ? "Enhanced" : "Natural"} />
+          <Metric label="Auto Transcription" value={autoTranscriptionEnabled ? "On" : "Off"} />
           <Metric label="Calibration" value={calibration ? calibration.createdAt.slice(0, 10) : "Not saved"} />
         </div>
       </section>
@@ -1836,6 +2429,47 @@ function DevicePicker({
         ))}
       </select>
       <button className="icon-button" title="Refresh microphones and request permission" onClick={onRefreshDevices}>
+        <RotateCcw size={18} />
+      </button>
+    </div>
+  );
+}
+
+function CameraPicker({
+  cameras,
+  disabled,
+  onRefreshDevices,
+  onSelectCamera,
+  selectedCameraId
+}: {
+  cameras: MediaDeviceInfo[];
+  disabled?: boolean;
+  onRefreshDevices: () => void;
+  onSelectCamera: (id: string) => void;
+  selectedCameraId: string;
+}) {
+  return (
+    <div className="device-picker">
+      <label htmlFor="camera-select">Camera</label>
+      <select
+        id="camera-select"
+        value={selectedCameraId}
+        disabled={disabled}
+        onChange={(event) => onSelectCamera(event.target.value)}
+      >
+        {cameras.length === 0 && <option value="">No camera labels yet</option>}
+        {cameras.map((camera, index) => (
+          <option key={camera.deviceId || index} value={camera.deviceId}>
+            {camera.label || `Camera ${index + 1}`}
+          </option>
+        ))}
+      </select>
+      <button
+        className="icon-button"
+        title="Refresh cameras and request permission"
+        onClick={onRefreshDevices}
+        disabled={disabled}
+      >
         <RotateCcw size={18} />
       </button>
     </div>
@@ -2047,6 +2681,7 @@ function SessionList({
       {sessions.map((saved) => (
         <button key={saved.session.id} className="session-row" onClick={() => onOpenSession(saved)}>
           <span>{saved.session.metadata?.title || new Date(saved.session.createdAt).toLocaleString()}</span>
+          <strong>{formatRecordingKind(saved.session.recordingKind)}</strong>
           <strong>{formatMs(saved.session.durationMs)}</strong>
           <em>
             {saved.coachReport
@@ -2070,7 +2705,19 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function preferredRecorderOptions(): MediaRecorderOptions | undefined {
+function preferredRecorderOptions(includeVideo: boolean): MediaRecorderOptions | undefined {
+  if (includeVideo && MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")) {
+    return { mimeType: "video/webm;codecs=vp9,opus" };
+  }
+
+  if (includeVideo && MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")) {
+    return { mimeType: "video/webm;codecs=vp8,opus" };
+  }
+
+  if (includeVideo && MediaRecorder.isTypeSupported("video/webm")) {
+    return { mimeType: "video/webm" };
+  }
+
   return MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
     ? { mimeType: "audio/webm;codecs=opus" }
     : undefined;
@@ -2099,6 +2746,30 @@ function formatState(state: LevelState): string {
   return state === "silent" ? "Silent" : state === "quiet" ? "Quiet" : state === "good" ? "Good" : "Strong";
 }
 
+function formatTranscriptionState(state: AutoTranscriptionState, enabled: boolean): string {
+  if (!enabled) {
+    return "Disabled";
+  }
+
+  if (state === "starting") {
+    return "Starting Windows recognizer";
+  }
+
+  if (state === "listening") {
+    return "Listening";
+  }
+
+  if (state === "error") {
+    return "Unavailable";
+  }
+
+  if (state === "unavailable") {
+    return "Unavailable";
+  }
+
+  return "Ready";
+}
+
 function formatMs(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -2119,12 +2790,32 @@ function formatAverageScore(values: Array<number | null | undefined>): string {
   return `${Math.round(scores.reduce((total, value) => total + value, 0) / scores.length)}/100`;
 }
 
+function formatRecordingKind(kind?: RecordingMode): string {
+  return kind === "video" ? "Video" : "Audio";
+}
+
 function formatNullableScore(value: number | null): string {
   return value === null ? "--" : `${value}/100`;
 }
 
 function formatSkillLabel(value: keyof CoachReport["scores"] | null): string {
   return value ? value[0].toUpperCase() + value.slice(1) : "--";
+}
+
+function formatTranscriptSource(source?: TranscriptDocument["source"]): string {
+  if (source === "windows_builtin") {
+    return "Built-in speech";
+  }
+
+  if (source === "windows_dictation") {
+    return "Windows speech input";
+  }
+
+  if (source === "manual") {
+    return "Manual";
+  }
+
+  return "Missing";
 }
 
 function formatError(error: unknown): string {

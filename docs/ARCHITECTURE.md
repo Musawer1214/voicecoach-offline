@@ -207,26 +207,46 @@ sessions/*/transcript.json
 
 The aggregation is deterministic and local. It reports session count, total practice time, average readiness, best readiness, transcript coverage, per-goal summaries, and weakest skill trends.
 
-## Windows Speech Input
+## Camera and Transcription Pipeline
 
-VoiceCoach does not own a Windows speech-to-text engine in `0.5.0`. The review screen can focus the transcript field so the user can dictate with Windows voice typing or Windows Voice Access. The saved transcript source records whether text came from manual entry or Windows speech-assisted entry.
+`0.6.0` extends the practice stream from audio-only to optional camera-plus-microphone capture:
+
+```text
+getUserMedia(audio + optional video)
+  -> Web Audio analyzer for calibrated volume samples
+  -> MediaRecorder for recording.webm
+  -> session.json recordingKind + cameraSettings
+  -> Review media player
+```
+
+Built-in transcription is intentionally isolated from the media recorder. The main process starts a local Windows `System.Speech` helper process, reads JSON events from stdout, and forwards them over IPC:
+
+```text
+PowerShell + System.Speech
+  -> ready / partial / final / error events
+  -> preload transcription bridge
+  -> live transcript preview
+  -> transcript.json + suggestions.json
+```
+
+The review screen still supports Windows speech input as a manual fallback. Transcript source values now distinguish `manual`, `windows_dictation`, and `windows_builtin`.
 
 ## Security Defaults
 
 - `contextIsolation: true`
 - `nodeIntegration: false`
 - renderer file writes go through IPC
-- no internet or cloud services in current `0.x` releases
+- no internet or cloud services for app-owned recording, reports, progress, or built-in transcription
 
 ## Future Architecture Notes
 
-Grammar feedback should not be added directly to the live audio layer. Manual transcript feedback is a separate review artifact and exported Markdown reports include that feedback. Automatic offline transcription can be added later as another provider:
+Grammar feedback should not be added directly to the live audio layer. Transcript feedback is a separate review artifact and exported Markdown reports include that feedback. Future providers can be added behind the same transcription event shape:
 
 ```text
 recording.webm
   -> report.json
   -> coach-report.json
-  -> optional transcript.json
+  -> transcript.json
   -> suggestions.json
   -> review screen
 ```

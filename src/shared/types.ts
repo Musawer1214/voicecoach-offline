@@ -15,13 +15,23 @@ export type CalibrationProfile = {
 };
 
 export type MicrophoneProcessingMode = "enhanced" | "natural";
+export type CameraResolution = "640x360" | "1280x720" | "1920x1080";
+export type RecordingKind = "audio" | "video";
+export type TranscriptSource = "manual" | "windows_dictation" | "windows_builtin";
 
 export type AppSettings = {
   schemaVersion: 1;
   selectedDeviceId: string;
   selectedDeviceLabel: string;
+  selectedCameraId?: string;
+  selectedCameraLabel?: string;
   microphoneProcessingMode?: MicrophoneProcessingMode;
   reviewPlaybackGain?: number;
+  cameraEnabled?: boolean;
+  cameraResolution?: CameraResolution;
+  cameraFrameRate?: number;
+  cameraMirror?: boolean;
+  autoTranscriptionEnabled?: boolean;
   updatedAt: string;
 };
 
@@ -111,7 +121,7 @@ export type AudioReport = {
 export type TranscriptDocument = {
   schemaVersion: 1;
   sessionId: string;
-  source: "manual" | "windows_dictation";
+  source: TranscriptSource;
   text: string;
   updatedAt: string;
 };
@@ -165,6 +175,14 @@ export type VoiceCoachSession = {
   calibrationSnapshot?: CalibrationProfile | null;
   metadata?: SessionMetadata;
   recordingFile: "recording.webm";
+  recordingKind?: RecordingKind;
+  cameraDeviceId?: string;
+  cameraDeviceLabel?: string;
+  cameraSettings?: {
+    resolution: CameraResolution;
+    frameRate: number;
+    mirrored: boolean;
+  };
   samples: VolumeSample[];
   events: SessionEvent[];
   summary: {
@@ -224,6 +242,52 @@ export type SessionIdPayload = {
   sessionId: string;
 };
 
+export type TranscriptionProvider = "windows_system_speech";
+
+export type TranscriptionStartOptions = {
+  provider?: TranscriptionProvider;
+  culture?: string;
+};
+
+export type TranscriptionEvent =
+  | {
+      type: "ready";
+      provider: TranscriptionProvider;
+      message: string;
+      at: string;
+    }
+  | {
+      type: "partial";
+      provider: TranscriptionProvider;
+      text: string;
+      confidence?: number;
+      at: string;
+    }
+  | {
+      type: "final";
+      provider: TranscriptionProvider;
+      text: string;
+      confidence?: number;
+      at: string;
+    }
+  | {
+      type: "error";
+      provider: TranscriptionProvider;
+      message: string;
+      at: string;
+    }
+  | {
+      type: "stopped";
+      provider: TranscriptionProvider;
+      message: string;
+      at: string;
+    };
+
+export type TranscriptionStartResult = {
+  ok: boolean;
+  provider: TranscriptionProvider;
+};
+
 export type VoiceCoachApi = {
   getAppMeta(): Promise<AppMeta>;
   loadSettings(): Promise<AppSettings | null>;
@@ -240,6 +304,9 @@ export type VoiceCoachApi = {
   exportSessionReport(payload: SessionIdPayload): Promise<string>;
   exportProgressReport(): Promise<string>;
   revealSessionFolder(payload: SessionIdPayload): Promise<string>;
+  startTranscription(options?: TranscriptionStartOptions): Promise<TranscriptionStartResult>;
+  stopTranscription(): Promise<void>;
+  onTranscriptionEvent(callback: (event: TranscriptionEvent) => void): () => void;
 };
 
 export const SESSION_SCHEMA_VERSION = 1;
@@ -262,6 +329,9 @@ export function isVoiceCoachSession(value: unknown): value is VoiceCoachSession 
     typeof candidate.createdAt === "string" &&
     typeof candidate.durationMs === "number" &&
     candidate.recordingFile === "recording.webm" &&
+    (candidate.recordingKind === undefined ||
+      candidate.recordingKind === "audio" ||
+      candidate.recordingKind === "video") &&
     Array.isArray(candidate.samples) &&
     Array.isArray(candidate.events) &&
     typeof candidate.summary?.targetVolumePercent === "number" &&
@@ -296,7 +366,9 @@ export function isTranscriptDocument(value: unknown): value is TranscriptDocumen
   return (
     candidate.schemaVersion === TRANSCRIPT_SCHEMA_VERSION &&
     typeof candidate.sessionId === "string" &&
-    (candidate.source === "manual" || candidate.source === "windows_dictation") &&
+    (candidate.source === "manual" ||
+      candidate.source === "windows_dictation" ||
+      candidate.source === "windows_builtin") &&
     typeof candidate.text === "string" &&
     typeof candidate.updatedAt === "string"
   );

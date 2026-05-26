@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.5.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, and Windows speech-assisted transcript entry.
+`0.6.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, and built-in Windows speech transcription when the local recognizer is available.
 
 ## Why Electron
 
@@ -27,9 +27,11 @@ JSON is enough for pre-`1.0` because:
 
 SQLite can be introduced later when session search, filtering, analytics, or long-term history need it.
 
-## Why No Transcription Yet
+## Why Built-in Transcription Is Provider-Based
 
-The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.2` improved laptop microphone capture and review playback, `0.4.0` added Coach Mode, and `0.5.0` added progress tracking on top of those local artifacts. Automatic app-owned transcription remains deferred until the app is stable enough for native Windows or bundled model work.
+The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.2` improved laptop microphone capture and review playback, `0.4.0` added Coach Mode, and `0.5.0` added progress tracking on top of those local artifacts.
+
+`0.6.0` adds built-in transcription through a narrow provider bridge instead of automating the Windows `Win+H` overlay. The first provider uses Windows `System.Speech` through a local helper process. If this provider is not reliable enough on every Windows 11 machine, the same app contract can accept a native Windows Runtime helper or a bundled open-source model later.
 
 ## Electron Launch Note
 
@@ -59,6 +61,10 @@ Before marking a version ready:
 - refresh microphone permissions
 - run calibration
 - start a practice session
+- verify camera preview appears in camera mode
+- verify audio-only mode still records without camera
+- verify built-in transcription starts or shows a clear warning if unavailable
+- confirm final transcript is saved after recording when recognition text is produced
 - speak softly for more than 1.5 seconds
 - confirm warning appears
 - stay silent for more than 3 seconds

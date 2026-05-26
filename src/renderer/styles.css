@@ -332,6 +332,7 @@ button:disabled {
 }
 
 .session-setup-panel,
+.capture-settings-panel,
 .metadata-editor,
 .coach-report-panel,
 .report-panel,
@@ -339,6 +340,48 @@ button:disabled {
 .text-report {
   display: grid;
   gap: 14px;
+}
+
+.capture-grid,
+.camera-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.camera-options label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-weight: 700;
+}
+
+.camera-options select {
+  min-height: 40px;
+  border: 1px solid #d5dbe5;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #ffffff;
+}
+
+.toggle-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-weight: 800;
+}
+
+.toggle-control.inline {
+  align-content: center;
+  justify-content: start;
+  min-height: 40px;
+}
+
+.toggle-control input {
+  width: 18px;
+  height: 18px;
+  accent-color: #14b8a6;
 }
 
 .goal-selector {
@@ -722,9 +765,35 @@ button:disabled {
 .practice-surface {
   display: grid;
   place-items: center;
-  gap: 28px;
-  min-height: 470px;
+  gap: 22px;
+  min-height: 520px;
   padding: 42px;
+}
+
+.camera-preview-shell {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 720px);
+}
+
+.camera-preview-shell video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #0f172a;
+  object-fit: cover;
+}
+
+.camera-preview-shell video.mirrored,
+.review-player video.mirrored {
+  transform: scaleX(-1);
+}
+
+.camera-preview-shell span {
+  color: #64748b;
+  font-size: 13px;
+  text-align: center;
 }
 
 .state-pill {
@@ -763,6 +832,48 @@ button:disabled {
   width: 100%;
 }
 
+.live-transcript {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 720px);
+  padding: 14px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.live-transcript.listening {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.live-transcript.error,
+.live-transcript.unavailable {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.live-transcript div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.live-transcript strong {
+  color: #111827;
+}
+
+.live-transcript span,
+.live-transcript p {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.live-transcript p {
+  min-height: 40px;
+  margin: 0;
+}
+
 .review-player {
   display: grid;
   gap: 14px;
@@ -774,6 +885,18 @@ button:disabled {
 
 .review-player audio {
   display: none;
+}
+
+.review-player.video-player audio {
+  display: none;
+}
+
+.review-player video {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 8px;
+  background: #0f172a;
+  object-fit: contain;
 }
 
 .player-main-row,
@@ -1060,7 +1183,7 @@ button:disabled {
 
 .session-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 90px 90px;
+  grid-template-columns: minmax(0, 1fr) 74px 90px 90px;
   align-items: center;
   gap: 12px;
   min-height: 46px;
@@ -1131,7 +1254,9 @@ button:disabled {
   .goal-selector,
   .coach-overview,
   .coach-columns,
-  .goal-progress-grid {
+  .goal-progress-grid,
+  .capture-grid,
+  .camera-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

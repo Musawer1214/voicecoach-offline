@@ -28,6 +28,7 @@ import {
   SessionIdPayload,
   UpdateSessionPayload
 } from "../shared/types.js";
+import { startTranscription, stopTranscription } from "./transcription.js";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -72,6 +73,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  stopTranscription();
   if (process.platform !== "darwin") {
     app.quit();
   }
@@ -100,4 +102,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle("sessions:export-report", (_event, payload: SessionIdPayload) => exportSessionReport(payload));
   ipcMain.handle("sessions:export-progress", () => exportProgressReport());
   ipcMain.handle("sessions:reveal-folder", (_event, payload: SessionIdPayload) => revealSessionFolder(payload));
+  ipcMain.handle("transcription:start", (_event, options) => startTranscription(mainWindow, options));
+  ipcMain.handle("transcription:stop", () => {
+    stopTranscription();
+  });
 }

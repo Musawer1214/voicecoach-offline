@@ -9,6 +9,9 @@ import {
   SaveSessionPayload,
   SaveTranscriptPayload,
   SessionIdPayload,
+  TranscriptionEvent,
+  TranscriptionStartOptions,
+  TranscriptionStartResult,
   UpdateSessionPayload,
   VoiceCoachApi
 } from "../shared/types.js";
@@ -35,7 +38,15 @@ const api: VoiceCoachApi = {
     ipcRenderer.invoke("sessions:export-report", payload) as Promise<string>,
   exportProgressReport: () => ipcRenderer.invoke("sessions:export-progress") as Promise<string>,
   revealSessionFolder: (payload: SessionIdPayload) =>
-    ipcRenderer.invoke("sessions:reveal-folder", payload) as Promise<string>
+    ipcRenderer.invoke("sessions:reveal-folder", payload) as Promise<string>,
+  startTranscription: (options?: TranscriptionStartOptions) =>
+    ipcRenderer.invoke("transcription:start", options) as Promise<TranscriptionStartResult>,
+  stopTranscription: () => ipcRenderer.invoke("transcription:stop") as Promise<void>,
+  onTranscriptionEvent: (callback: (event: TranscriptionEvent) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: TranscriptionEvent) => callback(payload);
+    ipcRenderer.on("transcription:event", listener);
+    return () => ipcRenderer.removeListener("transcription:event", listener);
+  }
 };
 
 contextBridge.exposeInMainWorld("voiceCoach", api);

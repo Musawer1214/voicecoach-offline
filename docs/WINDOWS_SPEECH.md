@@ -1,19 +1,28 @@
 # Windows Speech Notes
 
-VoiceCoach Offline `0.5.0` supports Windows speech as an assisted transcript-entry workflow.
+VoiceCoach Offline `0.6.0` supports built-in Windows transcription and still keeps Windows speech input as a fallback transcript-entry workflow.
 
-## What the App Does
+## Built-in Provider
 
-In the Review screen, the **Use Windows Speech** button focuses the transcript editor and marks the transcript source as `windows_dictation`. You can then use Windows voice typing or Windows Voice Access to put text into the box, and VoiceCoach will analyze the resulting transcript locally after you save it.
+When **Built-in transcription** is enabled in Practice, VoiceCoach starts a local helper process that uses the Windows `System.Speech` recognizer. The helper streams JSON events back to the Electron main process:
 
-This keeps VoiceCoach simple and offline-first:
+```text
+ready
+partial transcript text
+final transcript text
+error
+stopped
+```
 
-- no bundled speech model
-- no hidden cloud call from the app
-- no native Windows speech runtime dependency
-- no change to the audio recording pipeline
+The renderer shows partial/final text during recording. When the session is saved, VoiceCoach writes the final text to `transcript.json` with source `windows_builtin`, then runs local grammar and clarity suggestions.
 
-## Windows Voice Typing vs Voice Access
+This is not the same as embedding the Windows `Win+H` popup. The popup is a Windows-owned UI. VoiceCoach uses its own app-owned provider bridge so the transcript can be saved with the session.
+
+## Fallback Entry
+
+In the Review screen, the **Use Windows Speech** button still focuses the transcript editor and marks the transcript source as `windows_dictation`. You can then use Windows voice typing or Windows Voice Access to put text into the box, and VoiceCoach will analyze the resulting transcript locally after you save it.
+
+## Windows Voice Typing vs Voice Access vs System.Speech
 
 Microsoft documents Windows voice typing, opened with `Win+H`, as using online speech recognition powered by Azure Speech services:
 
@@ -23,8 +32,11 @@ Microsoft also documents Windows Voice Access as a Windows 11 feature that can a
 
 https://support.microsoft.com/en-us/accessibility/windows/voice-access/set-up-voice-access
 
-Because these are Windows-owned features, VoiceCoach does not claim to control their recognition engine or privacy behavior. The app only accepts text that Windows enters into the transcript field.
+Because Windows voice typing and Voice Access are Windows-owned features, VoiceCoach does not claim to control their recognition engine or privacy behavior. The built-in provider is separate: it uses the local Windows speech recognition APIs exposed to desktop apps.
 
-## Future Research
+## Current Limits
 
-A later version can investigate deeper integration with Windows speech APIs such as `Windows.Media.SpeechRecognition`. That should be treated as a spike because Electron integration, permissions, language packs, and parity with Windows voice typing or Voice Access all need verification.
+- Recognition quality can differ from Win+H or Voice Access.
+- Language availability depends on Windows speech recognition support on the PC.
+- Long-session stability still needs more manual testing before `1.0.0`.
+- A later provider can use Windows Runtime speech APIs or a bundled open-source model if `System.Speech` is not enough.
