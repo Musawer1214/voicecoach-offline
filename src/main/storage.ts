@@ -6,7 +6,9 @@ import {
   AppSettings,
   AudioReport,
   CalibrationProfile,
+  CoachReport,
   SavedSession,
+  SaveCoachReportPayload,
   SaveReportPayload,
   SaveSessionPayload,
   SaveTranscriptPayload,
@@ -16,6 +18,7 @@ import {
   UpdateSessionPayload,
   VoiceCoachSession,
   isAudioReport,
+  isCoachReport,
   isTextSuggestionDocument,
   isTranscriptDocument,
   isVoiceCoachSession
@@ -31,6 +34,7 @@ const RECORDING_FILE = "recording.webm";
 const REPORT_FILE = "report.json";
 const TRANSCRIPT_FILE = "transcript.json";
 const SUGGESTIONS_FILE = "suggestions.json";
+const COACH_REPORT_FILE = "coach-report.json";
 
 export function getDataDir(): string {
   return path.join(app.getPath("userData"), DATA_DIR_NAME);
@@ -105,15 +109,18 @@ export async function listSessions(): Promise<SavedSession[]> {
       const raw = await readFile(sessionPath, "utf8");
       const session = JSON.parse(raw) as VoiceCoachSession;
       if (isVoiceCoachSession(session)) {
-        const [report, transcript, textSuggestions] = await Promise.all([
+        const [report, transcript, textSuggestions, coachReport] = await Promise.all([
           readOptionalJson<AudioReport>(path.join(folderPath, REPORT_FILE), isAudioReport),
           readOptionalJson<TranscriptDocument>(path.join(folderPath, TRANSCRIPT_FILE), isTranscriptDocument),
           readOptionalJson<TextSuggestionDocument>(
             path.join(folderPath, SUGGESTIONS_FILE),
             isTextSuggestionDocument
-          )
+          ),
+          readOptionalJson<CoachReport>(path.join(folderPath, COACH_REPORT_FILE), isCoachReport)
         ]);
-        sessions.push(toSavedSession(session, report, transcript, textSuggestions, folderPath, sessionPath, recordingPath));
+        sessions.push(
+          toSavedSession(session, report, transcript, textSuggestions, coachReport, folderPath, sessionPath, recordingPath)
+        );
       }
     } catch {
       // Ignore incomplete or manually edited session folders in this prototype.
@@ -136,8 +143,20 @@ export async function saveSession(payload: SaveSessionPayload): Promise<SavedSes
   if (payload.report) {
     await writeJson(path.join(folderPath, REPORT_FILE), payload.report);
   }
+  if (payload.coachReport) {
+    await writeJson(path.join(folderPath, COACH_REPORT_FILE), payload.coachReport);
+  }
 
-  return toSavedSession(payload.session, payload.report ?? null, null, null, folderPath, sessionPath, recordingPath);
+  return toSavedSession(
+    payload.session,
+    payload.report ?? null,
+    null,
+    null,
+    payload.coachReport ?? null,
+    folderPath,
+    sessionPath,
+    recordingPath
+  );
 }
 
 export async function updateSession(payload: UpdateSessionPayload): Promise<SavedSession> {
@@ -169,6 +188,7 @@ export async function updateSession(payload: UpdateSessionPayload): Promise<Save
           extras.report,
           extras.transcript,
           extras.textSuggestions,
+          extras.coachReport,
           folderPath,
           sessionPath,
           recordingPath
@@ -191,6 +211,7 @@ export async function saveReport(payload: SaveReportPayload): Promise<SavedSessi
     extras.report,
     extras.transcript,
     extras.textSuggestions,
+    extras.coachReport,
     found.folderPath,
     found.sessionPath,
     found.recordingPath
@@ -207,6 +228,23 @@ export async function saveTranscript(payload: SaveTranscriptPayload): Promise<Sa
     extras.report,
     extras.transcript,
     extras.textSuggestions,
+    extras.coachReport,
+    found.folderPath,
+    found.sessionPath,
+    found.recordingPath
+  );
+}
+
+export async function saveCoachReport(payload: SaveCoachReportPayload): Promise<SavedSession> {
+  const found = await findSessionFolder(payload.sessionId);
+  await writeJson(path.join(found.folderPath, COACH_REPORT_FILE), payload.coachReport);
+  const extras = await readSessionExtras(found.folderPath);
+  return toSavedSession(
+    found.session,
+    extras.report,
+    extras.transcript,
+    extras.textSuggestions,
+    extras.coachReport,
     found.folderPath,
     found.sessionPath,
     found.recordingPath
@@ -224,7 +262,7 @@ export async function exportSessionReport(payload: SessionIdPayload): Promise<st
   const exportPath = path.join(found.folderPath, "report.md");
   await writeFile(
     exportPath,
-    buildMarkdownReport(found.session, extras.report, extras.transcript, extras.textSuggestions),
+    buildMarkdownReport(found.session, extras.report, extras.transcript, extras.textSuggestions, extras.coachReport),
     "utf8"
   );
   return exportPath;
@@ -240,6 +278,7 @@ function toSavedSession(
   report: AudioReport | null,
   transcript: TranscriptDocument | null,
   textSuggestions: TextSuggestionDocument | null,
+  coachReport: CoachReport | null,
   folderPath: string,
   sessionPath: string,
   recordingPath: string
@@ -249,6 +288,7 @@ function toSavedSession(
     report,
     transcript,
     textSuggestions,
+    coachReport,
     folderPath,
     sessionPath,
     recordingPath,
@@ -282,14 +322,16 @@ async function readSessionExtras(folderPath: string): Promise<{
   report: AudioReport | null;
   transcript: TranscriptDocument | null;
   textSuggestions: TextSuggestionDocument | null;
+  coachReport: CoachReport | null;
 }> {
-  const [report, transcript, textSuggestions] = await Promise.all([
+  const [report, transcript, textSuggestions, coachReport] = await Promise.all([
     readOptionalJson<AudioReport>(path.join(folderPath, REPORT_FILE), isAudioReport),
     readOptionalJson<TranscriptDocument>(path.join(folderPath, TRANSCRIPT_FILE), isTranscriptDocument),
-    readOptionalJson<TextSuggestionDocument>(path.join(folderPath, SUGGESTIONS_FILE), isTextSuggestionDocument)
+    readOptionalJson<TextSuggestionDocument>(path.join(folderPath, SUGGESTIONS_FILE), isTextSuggestionDocument),
+    readOptionalJson<CoachReport>(path.join(folderPath, COACH_REPORT_FILE), isCoachReport)
   ]);
 
-  return { report, transcript, textSuggestions };
+  return { report, transcript, textSuggestions, coachReport };
 }
 
 async function findSessionFolder(sessionId: string): Promise<{

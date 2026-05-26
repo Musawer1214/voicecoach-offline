@@ -1,10 +1,11 @@
-import { AudioReport, TextSuggestionDocument, TranscriptDocument, VoiceCoachSession } from "./types";
+import { AudioReport, CoachReport, TextSuggestionDocument, TranscriptDocument, VoiceCoachSession } from "./types";
 
 export function buildMarkdownReport(
   session: VoiceCoachSession,
   report: AudioReport | null,
   transcript: TranscriptDocument | null,
-  textSuggestions: TextSuggestionDocument | null
+  textSuggestions: TextSuggestionDocument | null,
+  coachReport: CoachReport | null = null
 ): string {
   const title = session.metadata?.title || "VoiceCoach Session";
   const lines = [
@@ -22,6 +23,49 @@ export function buildMarkdownReport(
 
   if (session.metadata?.notes) {
     lines.push("## Notes", "", session.metadata.notes, "");
+  }
+
+  if (coachReport) {
+    lines.push(
+      "## Coach Mode",
+      "",
+      `Goal: ${coachReport.goalLabel}`,
+      `Readiness score: ${coachReport.readinessScore}/100`,
+      `Projection: ${coachReport.scores.projection}/100`,
+      `Clarity: ${coachReport.scores.clarity}/100`,
+      `Pacing: ${coachReport.scores.pacing}/100`,
+      `Consistency: ${coachReport.scores.consistency}/100`,
+      "",
+      coachReport.summary,
+      ""
+    );
+
+    if (coachReport.strengths.length > 0) {
+      lines.push("### Strengths", "");
+      for (const suggestion of coachReport.strengths) {
+        lines.push(`- **${suggestion.title}**: ${suggestion.detail}`);
+      }
+      lines.push("");
+    }
+
+    if (coachReport.priorities.length > 0) {
+      lines.push("### Priorities", "");
+      for (const suggestion of coachReport.priorities) {
+        lines.push(`- **${suggestion.title}**: ${suggestion.detail}`);
+      }
+      lines.push("");
+    }
+
+    lines.push(
+      "### Next Drill",
+      "",
+      `**${coachReport.nextDrill.title}**: ${coachReport.nextDrill.detail}`,
+      ""
+    );
+    for (const step of coachReport.nextDrill.steps) {
+      lines.push(`- ${step}`);
+    }
+    lines.push("");
   }
 
   if (report) {

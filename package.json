@@ -1,6 +1,6 @@
 {
   "name": "voicecoach-offline",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Offline-first Windows voice volume coaching prototype.",
   "productName": "VoiceCoach Offline",
   "author": "VoiceCoach Offline contributors",
@@ -50,6 +50,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false,
       "target": [
         "nsis",

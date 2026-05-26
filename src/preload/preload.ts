@@ -3,6 +3,7 @@ import {
   AppMeta,
   AppSettings,
   CalibrationProfile,
+  SaveCoachReportPayload,
   SaveReportPayload,
   SavedSession,
   SaveSessionPayload,
@@ -27,6 +28,8 @@ const api: VoiceCoachApi = {
     ipcRenderer.invoke("sessions:save-report", payload) as Promise<SavedSession>,
   saveTranscript: (payload: SaveTranscriptPayload) =>
     ipcRenderer.invoke("sessions:save-transcript", payload) as Promise<SavedSession>,
+  saveCoachReport: (payload: SaveCoachReportPayload) =>
+    ipcRenderer.invoke("sessions:save-coach-report", payload) as Promise<SavedSession>,
   deleteSession: (payload: SessionIdPayload) => ipcRenderer.invoke("sessions:delete", payload) as Promise<void>,
   exportSessionReport: (payload: SessionIdPayload) =>
     ipcRenderer.invoke("sessions:export-report", payload) as Promise<string>,

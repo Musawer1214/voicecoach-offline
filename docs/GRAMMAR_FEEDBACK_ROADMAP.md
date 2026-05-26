@@ -29,9 +29,9 @@ Avoid wording like:
 - "Bad grammar"
 - "Failed"
 
-## Current Status in `0.3.0`
+## Current Status in `0.4.0`
 
-`0.3.0` starts grammar and clarity feedback without automatic transcription.
+`0.4.0` keeps grammar and clarity feedback offline without automatic transcription, then combines manual transcript signals with audio scoring inside Coach Mode.
 
 Added:
 
@@ -39,6 +39,8 @@ Added:
 - `transcript.json` saved beside the session
 - `suggestions.json` saved beside the session
 - local checks for filler words, repeated phrases, long sentences, and weak openings
+- `coach-report.json` saved beside the session
+- Coach Mode clarity score and next-drill suggestions
 
 Still deferred:
 
@@ -119,7 +121,17 @@ Completed:
 - repeated phrase detection
 - weak opening detection
 
-### `0.4.0`: Offline Transcript
+### `0.4.0`: Coach Mode and Product Polish
+
+Completed:
+
+- practice goals
+- readiness scorecards
+- combined audio/text coaching priorities
+- next-drill recommendations
+- GitHub README and brand assets
+
+### Future: Offline Transcript
 
 Add:
 
@@ -137,7 +149,7 @@ sessions/<date>/
   transcript.json
 ```
 
-### `0.5.0`: Stronger Grammar Suggestions
+### Future: Stronger Grammar Suggestions
 
 Add:
 
@@ -147,7 +159,7 @@ Add:
 - repeated phrase detection
 - timeline links from suggestions to transcript segments
 
-### `0.6.0`: Local LanguageTool Integration
+### Future: Local LanguageTool Integration
 
 Add:
 
@@ -156,13 +168,17 @@ Add:
 - replacement text suggestions
 - setting to enable/disable grammar engine
 
-### `0.7.0`: Speaking Coach Report
+### Completed in `0.4.0`: Speaking Coach Report
 
-Add:
+Added:
 
 - combined report using volume, transcript, grammar, pauses, filler words, and pace
+- next-drill recommendation for weak sections
+
+Still future:
+
 - suggested rewritten answer
-- practice-again mode for weak sections
+- timestamped transcript segments
 
 ## Future Data Contract
 

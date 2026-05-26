@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { VoiceCoachSession, isVoiceCoachSession } from "./types";
+import { CoachReport, VoiceCoachSession, isCoachReport, isVoiceCoachSession } from "./types";
 
 describe("VoiceCoach session schema", () => {
   it("validates required schemaVersion 1 fields", () => {
@@ -23,5 +23,34 @@ describe("VoiceCoach session schema", () => {
 
     expect(isVoiceCoachSession(session)).toBe(true);
     expect(isVoiceCoachSession({ ...session, schemaVersion: 2 })).toBe(false);
+  });
+
+  it("validates coach report schemaVersion 1 fields", () => {
+    const report: CoachReport = {
+      schemaVersion: 1,
+      analyzerVersion: "coach-report-v1",
+      sessionId: "session-1",
+      createdAt: "2026-05-26T00:00:00.000Z",
+      goalId: "projection",
+      goalLabel: "Voice Projection",
+      readinessScore: 81,
+      scores: {
+        projection: 82,
+        clarity: 78,
+        pacing: 80,
+        consistency: 83
+      },
+      summary: "Ready for the next practice pass.",
+      strengths: [],
+      priorities: [],
+      nextDrill: {
+        title: "Projection baseline drill",
+        detail: "Repeat the same prompt.",
+        steps: ["Keep the meter in the target zone."]
+      }
+    };
+
+    expect(isCoachReport(report)).toBe(true);
+    expect(isCoachReport({ ...report, goalId: "unknown" })).toBe(false);
   });
 });

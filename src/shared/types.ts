@@ -46,6 +46,8 @@ export type SessionMetadata = {
   prompt: string;
   notes: string;
   tags: string[];
+  goalId?: PracticeGoalId;
+  goalLabel?: string;
   updatedAt: string;
 };
 
@@ -53,12 +55,30 @@ export type SuggestionSeverity = "success" | "info" | "warning";
 
 export type CoachingSuggestion = {
   id: string;
-  category: "volume" | "silence" | "consistency" | "clipping" | "calibration" | "transcript";
+  category:
+    | "volume"
+    | "silence"
+    | "consistency"
+    | "clipping"
+    | "calibration"
+    | "transcript"
+    | "goal"
+    | "clarity"
+    | "pacing"
+    | "coach";
   severity: SuggestionSeverity;
   title: string;
   detail: string;
   startMs?: number;
   endMs?: number;
+};
+
+export type PracticeGoalId = "projection" | "clarity" | "pacing" | "interview" | "confidence";
+
+export type PracticeGoal = {
+  id: PracticeGoalId;
+  label: string;
+  detail: string;
 };
 
 export type AudioReport = {
@@ -111,6 +131,30 @@ export type TextSuggestionDocument = {
   suggestions: CoachingSuggestion[];
 };
 
+export type CoachReport = {
+  schemaVersion: 1;
+  analyzerVersion: "coach-report-v1";
+  sessionId: string;
+  createdAt: string;
+  goalId: PracticeGoalId;
+  goalLabel: string;
+  readinessScore: number;
+  scores: {
+    projection: number;
+    clarity: number;
+    pacing: number;
+    consistency: number;
+  };
+  summary: string;
+  strengths: CoachingSuggestion[];
+  priorities: CoachingSuggestion[];
+  nextDrill: {
+    title: string;
+    detail: string;
+    steps: string[];
+  };
+};
+
 export type VoiceCoachSession = {
   schemaVersion: 1;
   id: string;
@@ -142,6 +186,7 @@ export type SavedSession = {
   report: AudioReport | null;
   transcript: TranscriptDocument | null;
   textSuggestions: TextSuggestionDocument | null;
+  coachReport: CoachReport | null;
   folderPath: string;
   sessionPath: string;
   recordingPath: string;
@@ -151,6 +196,7 @@ export type SavedSession = {
 export type SaveSessionPayload = {
   session: VoiceCoachSession;
   report?: AudioReport;
+  coachReport?: CoachReport;
   recordingData: ArrayBuffer;
 };
 
@@ -169,6 +215,11 @@ export type SaveTranscriptPayload = {
   textSuggestions: TextSuggestionDocument;
 };
 
+export type SaveCoachReportPayload = {
+  sessionId: string;
+  coachReport: CoachReport;
+};
+
 export type SessionIdPayload = {
   sessionId: string;
 };
@@ -184,6 +235,7 @@ export type VoiceCoachApi = {
   updateSession(payload: UpdateSessionPayload): Promise<SavedSession>;
   saveReport(payload: SaveReportPayload): Promise<SavedSession>;
   saveTranscript(payload: SaveTranscriptPayload): Promise<SavedSession>;
+  saveCoachReport(payload: SaveCoachReportPayload): Promise<SavedSession>;
   deleteSession(payload: SessionIdPayload): Promise<void>;
   exportSessionReport(payload: SessionIdPayload): Promise<string>;
   revealSessionFolder(payload: SessionIdPayload): Promise<string>;
@@ -195,6 +247,7 @@ export const SETTINGS_SCHEMA_VERSION = 1;
 export const AUDIO_REPORT_SCHEMA_VERSION = 1;
 export const TRANSCRIPT_SCHEMA_VERSION = 1;
 export const TEXT_SUGGESTIONS_SCHEMA_VERSION = 1;
+export const COACH_REPORT_SCHEMA_VERSION = 1;
 
 export function isVoiceCoachSession(value: unknown): value is VoiceCoachSession {
   if (!value || typeof value !== "object") {
@@ -261,5 +314,42 @@ export function isTextSuggestionDocument(value: unknown): value is TextSuggestio
     typeof candidate.updatedAt === "string" &&
     typeof candidate.metrics?.wordCount === "number" &&
     Array.isArray(candidate.suggestions)
+  );
+}
+
+export function isCoachReport(value: unknown): value is CoachReport {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as CoachReport;
+  return (
+    candidate.schemaVersion === COACH_REPORT_SCHEMA_VERSION &&
+    candidate.analyzerVersion === "coach-report-v1" &&
+    typeof candidate.sessionId === "string" &&
+    typeof candidate.createdAt === "string" &&
+    isPracticeGoalId(candidate.goalId) &&
+    typeof candidate.goalLabel === "string" &&
+    typeof candidate.readinessScore === "number" &&
+    typeof candidate.scores?.projection === "number" &&
+    typeof candidate.scores?.clarity === "number" &&
+    typeof candidate.scores?.pacing === "number" &&
+    typeof candidate.scores?.consistency === "number" &&
+    typeof candidate.summary === "string" &&
+    Array.isArray(candidate.strengths) &&
+    Array.isArray(candidate.priorities) &&
+    typeof candidate.nextDrill?.title === "string" &&
+    typeof candidate.nextDrill?.detail === "string" &&
+    Array.isArray(candidate.nextDrill?.steps)
+  );
+}
+
+export function isPracticeGoalId(value: unknown): value is PracticeGoalId {
+  return (
+    value === "projection" ||
+    value === "clarity" ||
+    value === "pacing" ||
+    value === "interview" ||
+    value === "confidence"
   );
 }

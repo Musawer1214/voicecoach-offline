@@ -7,8 +7,29 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.1.x`: audio-coaching prototype fixes
 - `0.2.x`: offline audio reports
 - `0.3.x`: transcript and local suggestions
-- `0.4.x`: optional offline transcription
+- `0.4.x`: Coach Mode and product polish
 - `1.0.0`: stable public release
+
+## 0.4.0 - 2026-05-26
+
+Added:
+
+- Coach Mode screen with guided goals for projection, clarity, pacing, interview answers, and confident delivery
+- per-session `coach-report.json` with readiness score, score breakdown, strengths, priorities, and next drill
+- goal metadata on new practice sessions
+- Coach Mode scorecard in review
+- update-coach action for older sessions
+- Coach Mode content in exported Markdown reports
+- README hero artwork, logo asset, and brand documentation
+
+Changed:
+
+- README now presents the project as the `0.4.0` Coach Mode release
+- roadmap now reserves offline transcription for a later risk-managed release instead of blocking `0.4.0`
+
+Tests:
+
+- added coverage for Coach Mode report scoring and schema validation
 
 ## 0.3.2 - 2026-05-26
 

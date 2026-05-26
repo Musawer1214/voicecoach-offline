@@ -10,6 +10,7 @@ import {
   loadSettings,
   revealSessionFolder,
   saveCalibration,
+  saveCoachReport,
   saveReport,
   saveSession,
   saveSettings,
@@ -19,6 +20,7 @@ import {
 import {
   AppSettings,
   CalibrationProfile,
+  SaveCoachReportPayload,
   SaveReportPayload,
   SaveSessionPayload,
   SaveTranscriptPayload,
@@ -90,6 +92,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("sessions:update", (_event, payload: UpdateSessionPayload) => updateSession(payload));
   ipcMain.handle("sessions:save-report", (_event, payload: SaveReportPayload) => saveReport(payload));
   ipcMain.handle("sessions:save-transcript", (_event, payload: SaveTranscriptPayload) => saveTranscript(payload));
+  ipcMain.handle("sessions:save-coach-report", (_event, payload: SaveCoachReportPayload) =>
+    saveCoachReport(payload)
+  );
   ipcMain.handle("sessions:delete", (_event, payload: SessionIdPayload) => deleteSession(payload));
   ipcMain.handle("sessions:export-report", (_event, payload: SessionIdPayload) => exportSessionReport(payload));
   ipcMain.handle("sessions:reveal-folder", (_event, payload: SessionIdPayload) => revealSessionFolder(payload));

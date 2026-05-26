@@ -1,36 +1,43 @@
 # VoiceCoach Offline
 
-VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger and clearer speaking volume.
+![VoiceCoach Offline Coach Mode preview](assets/brand/voicecoach-readme-hero.svg)
 
-Current version: `0.3.2`
+VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio-only practice sessions, gives live low-volume feedback, and saves local review reports.
 
-This release is an audio-coaching prototype. It proves the core loop:
+Current version: `0.4.0`
 
-- calibrate microphone volume
-- record an audio-only practice session
-- show live low-volume feedback
-- save local session JSON and `recording.webm`
-- review saved timeline markers
+`0.4.0` is the major Coach Mode release before the planned `1.0.0` stabilization release.
 
-No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.2`.
+## Highlights
 
-## What's New in 0.3.2
+- Fully offline by default: no cloud service, account, or internet connection required.
+- Calibrated live volume meter with low-volume warnings.
+- Audio-only local recording with `recording.webm` session files.
+- Coach Mode goals for projection, clarity, pacing, interview answers, and confident delivery.
+- Local scorecards for projection, clarity, pacing, consistency, and readiness.
+- Manual transcript analysis for filler words, repeated phrases, long sentences, and weak openings.
+- Exportable Markdown review reports.
+- Windows unpacked and portable build scripts.
 
-- enhanced microphone mode now allows browser/Windows echo cancellation, noise suppression, and auto gain
-- natural microphone mode remains available for raw mic measurement
-- review playback now has a clearer custom play bar
-- review playback boost can raise quiet recordings up to `4x`
-- review playback speed controls support `0.75x`, `1x`, `1.25x`, and `1.5x`
+## What's New in 0.4.0
 
-## Project Status
+- New Coach screen with guided practice goals and recent progress.
+- New `coach-report.json` per session with score breakdowns, strengths, priorities, and next-drill steps.
+- Practice sessions now save the active goal with session metadata.
+- Review now shows a Coach Mode scorecard and can refresh coach analysis for older sessions.
+- Markdown exports now include Coach Mode summaries.
+- Added project branding assets and brand documentation for GitHub presentation.
 
-`0.3.2` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
+## Status
 
-Planned future work:
+This project is still pre-`1.0.0`. The app is useful for offline audio practice now, but `1.0.0` is reserved for release hardening:
 
-- `0.4.x`: optional offline transcription engine
-- `0.5.x`: stronger grammar suggestions and timeline-linked transcript segments
-- `1.0.0`: complete offline speaking coach with stable installer/portable release
+- installer and portable release verification
+- accessibility pass
+- data migration safety
+- documentation cleanup
+- final icon/build metadata
+- optional offline transcription research after the core app is stable
 
 ## Requirements
 
@@ -76,12 +83,12 @@ Create an unsigned portable EXE:
 npm run dist:portable
 ```
 
-## Output
+## Build Output
 
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.3.2.exe
+release/VoiceCoach Offline 0.4.0.exe
 ```
 
 Unpacked builds are written to:
@@ -99,31 +106,40 @@ The app stores user data locally through Electron's `app.getPath("userData")` pa
 ```text
 VoiceCoachData/
   calibration.json
+  settings.json
   sessions/
     <session-date>/
       recording.webm
       session.json
       report.json
+      coach-report.json
       transcript.json
       suggestions.json
       report.md
 ```
 
-Session and calibration files use `schemaVersion: 1`.
+Session, calibration, report, coach, transcript, and suggestion files use `schemaVersion: 1`.
+
+## Privacy
+
+VoiceCoach Offline is designed for local practice. Audio recordings, transcripts, scorecards, suggestions, and session metadata stay on the user's PC. The app does not require internet access for its current features.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Brand Notes](docs/BRAND.md)
 - [Development Notes](docs/DEVELOPMENT.md)
 - [Grammar Feedback Roadmap](docs/GRAMMAR_FEEDBACK_ROADMAP.md)
 - [Versioning](docs/VERSIONING.md)
 - [GitHub Setup](docs/GITHUB_SETUP.md)
 - [Changelog](CHANGELOG.md)
 
-## Privacy
+## Roadmap
 
-`0.3.2` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
+- `0.4.x`: Coach Mode fixes and UX refinements.
+- `1.0.0`: stable offline speaking coach release.
+- Post-`1.0.0`: evaluate optional local transcription if model size, speed, accuracy, and packaging are acceptable.
 
 ## License
 
-No license has been chosen yet. Before publishing the repository publicly, choose a license such as MIT, Apache-2.0, GPL, or keep it unlicensed with all rights reserved.
+No license has been chosen yet. Until a license is added, the repository is public source but not automatically open source for reuse.

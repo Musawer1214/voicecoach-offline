@@ -13,9 +13,13 @@ import {
   RotateCcw,
   Save,
   Settings,
+  Sparkles,
   Square,
+  Target,
   Trash2,
+  TrendingUp,
   Timer,
+  Trophy,
   Volume2,
   Wand2
 } from "lucide-react";
@@ -25,8 +29,10 @@ import {
   AppSettings,
   AudioReport,
   CalibrationProfile,
+  CoachReport,
   LevelState,
   MicrophoneProcessingMode,
+  PracticeGoalId,
   SavedSession,
   SessionMetadata,
   TranscriptDocument,
@@ -50,9 +56,10 @@ import {
   smoothDb
 } from "./audio/level";
 import { buildAudioReport } from "./audio/report";
+import { PRACTICE_GOALS, buildCoachReport, resolvePracticeGoal } from "./coach/coach";
 import { buildTextSuggestions } from "./text/suggestions";
 
-type Screen = "home" | "calibration" | "practice" | "review" | "settings";
+type Screen = "home" | "coach" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
 
 const CALIBRATION_TOTAL_MS = 23_000;
@@ -80,6 +87,7 @@ export function App() {
   const [practiceTitle, setPracticeTitle] = useState("");
   const [practicePrompt, setPracticePrompt] = useState("");
   const [practiceNotes, setPracticeNotes] = useState("");
+  const [practiceGoalId, setPracticeGoalId] = useState<PracticeGoalId>("projection");
   const [microphoneProcessingMode, setMicrophoneProcessingMode] = useState<MicrophoneProcessingMode>(
     DEFAULT_MICROPHONE_PROCESSING_MODE
   );
@@ -119,8 +127,6 @@ export function App() {
     void initializeApp();
     return () => stopMicrophone();
   }, []);
-
-  const recentSessions = useMemo(() => sessions.slice(0, 5), [sessions]);
 
   async function initializeApp() {
     try {
@@ -313,7 +319,7 @@ export function App() {
       recordingWallStartedAtRef.current ? Math.round(performance.now() - recordingWallStartedAtRef.current) : 0
     );
     const events = analyzeSessionSamples(samples, calibrationForSession);
-    const metadata = buildSessionMetadata(practiceTitle, practicePrompt, practiceNotes);
+    const metadata = buildSessionMetadata(practiceTitle, practicePrompt, practiceNotes, [], practiceGoalId);
     const session: VoiceCoachSession = {
       schemaVersion: 1,
       id: crypto.randomUUID(),
@@ -329,6 +335,7 @@ export function App() {
       summary: buildSessionSummary(samples, events, calibrationForSession)
     };
     const report = buildAudioReport(session, calibrationForSession);
+    const coachReport = buildCoachReport(session, report, null, practiceGoalId);
     activeRecordingCalibrationRef.current = null;
     recordingStartedAtMsRef.current = null;
     recordingWallStartedAtRef.current = null;
@@ -337,6 +344,7 @@ export function App() {
       const saved = await window.voiceCoach.saveSession({
         session,
         report,
+        coachReport,
         recordingData: await recordingBlob.arrayBuffer()
       });
       const savedSessions = await window.voiceCoach.listSessions();
@@ -468,8 +476,9 @@ export function App() {
         sessionId: updatedWithSnapshot.id,
         report: buildAudioReport(updatedWithSnapshot, calibration)
       });
+      const savedWithCoach = await refreshCoachReport(saved);
       const savedSessions = await window.voiceCoach.listSessions();
-      setReviewSession(saved);
+      setReviewSession(savedWithCoach);
       setSessions(savedSessions);
       setWarning("Session reanalyzed with current calibration");
     } catch (reanalyzeError) {
@@ -486,8 +495,9 @@ export function App() {
       setError("");
       const updatedSession = { ...reviewSession.session, metadata };
       const saved = await window.voiceCoach.updateSession({ session: updatedSession });
+      const savedWithCoach = await refreshCoachReport(saved);
       const savedSessions = await window.voiceCoach.listSessions();
-      setReviewSession(saved);
+      setReviewSession(savedWithCoach);
       setSessions(savedSessions);
       setWarning("Session details saved");
     } catch (metadataError) {
@@ -564,13 +574,40 @@ export function App() {
         transcript,
         textSuggestions
       });
+      const savedWithCoach = await refreshCoachReport(saved);
       const savedSessions = await window.voiceCoach.listSessions();
-      setReviewSession(saved);
+      setReviewSession(savedWithCoach);
       setSessions(savedSessions);
       setWarning("Transcript analyzed locally");
     } catch (transcriptError) {
       setError(formatError(transcriptError));
     }
+  }
+
+  async function refreshReviewCoachReport() {
+    if (!reviewSession) {
+      return;
+    }
+
+    try {
+      setError("");
+      const saved = await refreshCoachReport(reviewSession);
+      const savedSessions = await window.voiceCoach.listSessions();
+      setReviewSession(saved);
+      setSessions(savedSessions);
+      setWarning("Coach scorecard updated");
+    } catch (coachError) {
+      setError(formatError(coachError));
+    }
+  }
+
+  async function refreshCoachReport(saved: SavedSession): Promise<SavedSession> {
+    const goal = resolvePracticeGoal(saved.session.metadata?.goalId);
+    const coachReport = buildCoachReport(saved.session, saved.report, saved.textSuggestions, goal.id);
+    return window.voiceCoach.saveCoachReport({
+      sessionId: saved.session.id,
+      coachReport
+    });
   }
 
   const calibrationPercent = Math.min(100, Math.round((calibrationProgressMs / CALIBRATION_TOTAL_MS) * 100));
@@ -584,13 +621,16 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.3.2"}</span>
+            <span>v{meta?.version ?? "0.4.0"}</span>
           </div>
         </div>
 
         <nav className="nav-list">
           <NavButton icon={<Activity />} active={screen === "home"} onClick={() => setScreen("home")}>
             Home
+          </NavButton>
+          <NavButton icon={<Target />} active={screen === "coach"} onClick={() => setScreen("coach")}>
+            Coach
           </NavButton>
           <NavButton icon={<Wand2 />} active={screen === "calibration"} onClick={() => setScreen("calibration")}>
             Calibration
@@ -618,10 +658,20 @@ export function App() {
         {screen === "home" && (
           <HomeScreen
             calibration={calibration}
-            sessions={recentSessions}
+            sessions={sessions}
             onStartPractice={preparePractice}
             onStartCalibration={startCalibration}
             onOpenSession={openSession}
+          />
+        )}
+
+        {screen === "coach" && (
+          <CoachScreen
+            goalId={practiceGoalId}
+            onGoalChange={setPracticeGoalId}
+            onOpenSession={openSession}
+            onStartPractice={preparePractice}
+            sessions={sessions}
           />
         )}
 
@@ -652,9 +702,11 @@ export function App() {
             onChangeTitle={setPracticeTitle}
             onChangePrompt={setPracticePrompt}
             onChangeNotes={setPracticeNotes}
+            onGoalChange={setPracticeGoalId}
             onStartRecording={startRecording}
             onStopRecording={stopRecording}
             onStartCalibration={startCalibration}
+            goalId={practiceGoalId}
           />
         )}
 
@@ -670,6 +722,7 @@ export function App() {
             onRevealFolder={revealReviewFolder}
             onDeleteSession={deleteReviewSession}
             onSaveTranscript={saveReviewTranscript}
+            onRefreshCoachReport={refreshReviewCoachReport}
             playbackGain={reviewPlaybackGain}
             onPlaybackGainChange={updateReviewPlaybackGain}
           />
@@ -747,7 +800,10 @@ function HomeScreen({
       <div className="dashboard-grid">
         <Metric label="Calibration" value={calibration ? "Ready" : "Needed"} />
         <Metric label="Target Minimum" value={calibration ? `${calibration.targetMinDb} dB` : "--"} />
-        <Metric label="Low Warning" value={calibration ? `${calibration.lowThresholdDb} dB` : "--"} />
+        <Metric
+          label="Coach Average"
+          value={formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore))}
+        />
         <Metric label="Recent Sessions" value={String(sessions.length)} />
       </div>
 
@@ -759,6 +815,171 @@ function HomeScreen({
         <SessionList sessions={sessions} onOpenSession={onOpenSession} />
       </section>
     </section>
+  );
+}
+
+function CoachScreen({
+  goalId,
+  onGoalChange,
+  onOpenSession,
+  onStartPractice,
+  sessions
+}: {
+  goalId: PracticeGoalId;
+  onGoalChange: (goalId: PracticeGoalId) => void;
+  onOpenSession: (session: SavedSession) => void;
+  onStartPractice: () => void;
+  sessions: SavedSession[];
+}) {
+  const coachSessions = useMemo(
+    () => sessions.filter((session) => session.coachReport).slice(0, 8),
+    [sessions]
+  );
+  const latest = coachSessions[0]?.coachReport ?? null;
+  const bestScore = Math.max(0, ...coachSessions.map((session) => session.coachReport?.readinessScore ?? 0));
+  const averageScore = formatAverageScore(coachSessions.map((session) => session.coachReport?.readinessScore));
+  const selectedGoal = resolvePracticeGoal(goalId);
+
+  return (
+    <section className="screen">
+      <header className="screen-header">
+        <div>
+          <h1>Coach Mode</h1>
+          <p>Choose a practice goal, record a take, and review a local scorecard with the next drill.</p>
+        </div>
+        <div className="header-actions">
+          <button className="primary-button" onClick={onStartPractice}>
+            <Mic size={18} /> Start Guided Practice
+          </button>
+        </div>
+      </header>
+
+      <GoalSelector activeGoalId={goalId} onChange={onGoalChange} />
+
+      <div className="dashboard-grid">
+        <Metric label="Active Goal" value={selectedGoal.label} />
+        <Metric label="Average Score" value={averageScore} />
+        <Metric label="Best Score" value={bestScore ? `${bestScore}/100` : "--"} />
+        <Metric label="Coach Reports" value={String(coachSessions.length)} />
+      </div>
+
+      <section className="coach-overview">
+        <div className="coach-summary-panel">
+          <div className="panel-title">
+            <Sparkles size={18} />
+            <h2>Latest Coach Summary</h2>
+          </div>
+          {latest ? (
+            <>
+              <div className="readiness-score">
+                <strong>{latest.readinessScore}</strong>
+                <span>/100</span>
+              </div>
+              <p>{latest.summary}</p>
+              <ScoreBars report={latest} />
+            </>
+          ) : (
+            <div className="empty-state">
+              Record a practice session to generate the first local coach report.
+            </div>
+          )}
+        </div>
+
+        <div className="coach-summary-panel">
+          <div className="panel-title">
+            <TrendingUp size={18} />
+            <h2>Recent Progress</h2>
+          </div>
+          {coachSessions.length > 0 ? (
+            <div className="trend-list">
+              {coachSessions.map((saved) => (
+                <button key={saved.session.id} className="trend-row" onClick={() => onOpenSession(saved)}>
+                  <span>{saved.session.metadata?.title || new Date(saved.session.createdAt).toLocaleString()}</span>
+                  <ProgressBar value={saved.coachReport?.readinessScore ?? 0} />
+                  <strong>{saved.coachReport?.readinessScore ?? "--"}</strong>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">No progress trend yet.</div>
+          )}
+        </div>
+      </section>
+
+      {latest && (
+        <section className="panel">
+          <div className="panel-title">
+            <Trophy size={18} />
+            <h2>Next Drill</h2>
+          </div>
+          <div className="next-drill">
+            <strong>{latest.nextDrill.title}</strong>
+            <p>{latest.nextDrill.detail}</p>
+            <ol>
+              {latest.nextDrill.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function GoalSelector({
+  activeGoalId,
+  disabled = false,
+  onChange
+}: {
+  activeGoalId: PracticeGoalId;
+  disabled?: boolean;
+  onChange: (goalId: PracticeGoalId) => void;
+}) {
+  return (
+    <section className="goal-selector" aria-label="Practice goals">
+      {PRACTICE_GOALS.map((goal) => (
+        <button
+          key={goal.id}
+          className={`goal-card ${activeGoalId === goal.id ? "active" : ""}`}
+          disabled={disabled}
+          onClick={() => onChange(goal.id)}
+        >
+          <span>{goal.label}</span>
+          <small>{goal.detail}</small>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function ScoreBars({ report }: { report: CoachReport }) {
+  const rows = [
+    ["Projection", report.scores.projection],
+    ["Clarity", report.scores.clarity],
+    ["Pacing", report.scores.pacing],
+    ["Consistency", report.scores.consistency]
+  ] as const;
+
+  return (
+    <div className="score-bars">
+      {rows.map(([label, value]) => (
+        <div className="score-row" key={label}>
+          <span>{label}</span>
+          <ProgressBar value={value} />
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProgressBar({ value }: { value: number }) {
+  const width = Math.max(0, Math.min(100, value));
+  return (
+    <div className="progress-bar" aria-label={`${width} percent`}>
+      <div style={{ width: `${width}%` }} />
+    </div>
   );
 }
 
@@ -832,12 +1053,14 @@ function CalibrationScreen({
 
 function PracticeScreen({
   calibration,
+  goalId,
   isRecording,
   level,
   notes,
   onChangeNotes,
   onChangePrompt,
   onChangeTitle,
+  onGoalChange,
   onStartCalibration,
   onStartRecording,
   onStopRecording,
@@ -845,12 +1068,14 @@ function PracticeScreen({
   title
 }: {
   calibration: CalibrationProfile | null;
+  goalId: PracticeGoalId;
   isRecording: boolean;
   level: typeof initialLevel;
   notes: string;
   onChangeNotes: (value: string) => void;
   onChangePrompt: (value: string) => void;
   onChangeTitle: (value: string) => void;
+  onGoalChange: (goalId: PracticeGoalId) => void;
   onStartCalibration: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -870,6 +1095,8 @@ function PracticeScreen({
           </button>
         )}
       </header>
+
+      <GoalSelector activeGoalId={goalId} disabled={isRecording} onChange={onGoalChange} />
 
       <section className="panel session-setup-panel">
         <label>
@@ -931,6 +1158,7 @@ function ReviewScreen({
   onOpenSession,
   onPlaybackGainChange,
   onReanalyzeSession,
+  onRefreshCoachReport,
   onRevealFolder,
   onSaveTranscript,
   onUpdateMetadata,
@@ -944,6 +1172,7 @@ function ReviewScreen({
   onOpenSession: (session: SavedSession) => void;
   onPlaybackGainChange: (gain: number) => void;
   onReanalyzeSession: () => void;
+  onRefreshCoachReport: () => void;
   onRevealFolder: () => void;
   onSaveTranscript: (text: string) => void;
   onUpdateMetadata: (metadata: SessionMetadata) => void;
@@ -970,7 +1199,15 @@ function ReviewScreen({
   }, [session?.session.id]);
 
   function saveMetadata() {
-    onUpdateMetadata(buildSessionMetadata(draftTitle, draftPrompt, draftNotes, session?.session.metadata?.tags ?? []));
+    onUpdateMetadata(
+      buildSessionMetadata(
+        draftTitle,
+        draftPrompt,
+        draftNotes,
+        session?.session.metadata?.tags ?? [],
+        session?.session.metadata?.goalId
+      )
+    );
   }
 
   function seekAudio(ms: number) {
@@ -994,8 +1231,15 @@ function ReviewScreen({
         <>
           <section className="panel">
             <div className="review-actions">
-              <button className="secondary-button compact-button" onClick={onExportReport} disabled={!session.report}>
+              <button
+                className="secondary-button compact-button"
+                onClick={onExportReport}
+                disabled={!session.report && !session.coachReport}
+              >
                 <Download size={16} /> Export Report
+              </button>
+              <button className="secondary-button compact-button" onClick={onRefreshCoachReport}>
+                <Sparkles size={16} /> Update Coach
               </button>
               <button className="secondary-button compact-button" onClick={onRevealFolder}>
                 <ExternalLink size={16} /> Folder
@@ -1044,6 +1288,7 @@ function ReviewScreen({
               <Metric label="Low Events" value={String(session.session.summary.lowVolumeEventCount)} />
               <Metric label="Silence Events" value={String(session.session.summary.silenceEventCount)} />
             </div>
+            {session.coachReport && <CoachReportPanel report={session.coachReport} onSeek={seekAudio} />}
             {session.report && <AudioReportPanel report={session.report} onSeek={seekAudio} />}
             <section className="metadata-editor">
               <div className="panel-title">
@@ -1476,6 +1721,69 @@ function Timeline({ onSeek, session }: { onSeek?: (ms: number) => void; session:
   );
 }
 
+function CoachReportPanel({ onSeek, report }: { onSeek: (ms: number) => void; report: CoachReport }) {
+  return (
+    <section className="coach-report-panel">
+      <div className="panel-title">
+        <Target size={18} />
+        <h2>Coach Mode Scorecard</h2>
+      </div>
+      <div className="coach-report-head">
+        <div>
+          <span>{report.goalLabel}</span>
+          <strong>{report.readinessScore}/100</strong>
+        </div>
+        <p>{report.summary}</p>
+      </div>
+      <ScoreBars report={report} />
+      <div className="coach-columns">
+        <SuggestionColumn title="Strengths" suggestions={report.strengths} onSeek={onSeek} />
+        <SuggestionColumn title="Priorities" suggestions={report.priorities} onSeek={onSeek} />
+      </div>
+      <div className="next-drill compact">
+        <strong>{report.nextDrill.title}</strong>
+        <p>{report.nextDrill.detail}</p>
+        <ol>
+          {report.nextDrill.steps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+function SuggestionColumn({
+  onSeek,
+  suggestions,
+  title
+}: {
+  onSeek: (ms: number) => void;
+  suggestions: CoachReport["priorities"];
+  title: string;
+}) {
+  return (
+    <div className="suggestion-column">
+      <h3>{title}</h3>
+      {suggestions.length > 0 ? (
+        suggestions.map((suggestion) => (
+          <button
+            key={suggestion.id}
+            className={`suggestion-card ${suggestion.severity}`}
+            onClick={() => suggestion.startMs !== undefined && onSeek(suggestion.startMs)}
+          >
+            <strong>{suggestion.title}</strong>
+            <span>{suggestion.detail}</span>
+            {suggestion.startMs !== undefined && <em>{formatMs(suggestion.startMs)}</em>}
+          </button>
+        ))
+      ) : (
+        <div className="empty-state small">No items yet.</div>
+      )}
+    </div>
+  );
+}
+
 function AudioReportPanel({ onSeek, report }: { onSeek: (ms: number) => void; report: AudioReport }) {
   return (
     <section className="report-panel">
@@ -1550,7 +1858,13 @@ function SessionList({
         <button key={saved.session.id} className="session-row" onClick={() => onOpenSession(saved)}>
           <span>{saved.session.metadata?.title || new Date(saved.session.createdAt).toLocaleString()}</span>
           <strong>{formatMs(saved.session.durationMs)}</strong>
-          <em>{saved.report ? `${saved.report.metrics.overallScore}/100` : `${saved.session.summary.lowVolumeEventCount} low`}</em>
+          <em>
+            {saved.coachReport
+              ? `${saved.coachReport.readinessScore}/100`
+              : saved.report
+                ? `${saved.report.metrics.overallScore}/100`
+                : `${saved.session.summary.lowVolumeEventCount} low`}
+          </em>
         </button>
       ))}
     </div>
@@ -1572,12 +1886,21 @@ function preferredRecorderOptions(): MediaRecorderOptions | undefined {
     : undefined;
 }
 
-function buildSessionMetadata(title: string, prompt: string, notes: string, tags: string[] = []): SessionMetadata {
+function buildSessionMetadata(
+  title: string,
+  prompt: string,
+  notes: string,
+  tags: string[] = [],
+  goalId: PracticeGoalId = "projection"
+): SessionMetadata {
+  const goal = resolvePracticeGoal(goalId);
   return {
     title: title.trim() || "Practice session",
     prompt: prompt.trim(),
     notes: notes.trim(),
     tags,
+    goalId: goal.id,
+    goalLabel: goal.label,
     updatedAt: new Date().toISOString()
   };
 }
@@ -1595,6 +1918,15 @@ function formatMs(ms: number): string {
 
 function formatOptionalDb(value: number | null): string {
   return value === null ? "--" : `${value} dB`;
+}
+
+function formatAverageScore(values: Array<number | null | undefined>): string {
+  const scores = values.filter((value): value is number => typeof value === "number");
+  if (scores.length === 0) {
+    return "--";
+  }
+
+  return `${Math.round(scores.reduce((total, value) => total + value, 0) / scores.length)}/100`;
 }
 
 function formatError(error: unknown): string {

@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { AudioReport, TextSuggestionDocument, TranscriptDocument, VoiceCoachSession } from "./types";
+import { AudioReport, CoachReport, TextSuggestionDocument, TranscriptDocument, VoiceCoachSession } from "./types";
 import { buildMarkdownReport } from "./markdownReport";
 
 describe("markdown report export", () => {
   it("includes audio, transcript, and text suggestions", () => {
-    const markdown = buildMarkdownReport(makeSession(), makeReport(), makeTranscript(), makeTextSuggestions());
+    const markdown = buildMarkdownReport(
+      makeSession(),
+      makeReport(),
+      makeTranscript(),
+      makeTextSuggestions(),
+      makeCoachReport()
+    );
 
     expect(markdown).toContain("# Practice session");
+    expect(markdown).toContain("## Coach Mode");
+    expect(markdown).toContain("Readiness score: 84/100");
     expect(markdown).toContain("## Audio Report");
     expect(markdown).toContain("## Manual Transcript");
     expect(markdown).toContain("This is my transcript.");
@@ -38,6 +46,40 @@ function makeSession(): VoiceCoachSession {
       lowVolumeEventCount: 1,
       longestLowVolumeMs: 2000,
       silenceEventCount: 0
+    }
+  };
+}
+
+function makeCoachReport(): CoachReport {
+  return {
+    schemaVersion: 1,
+    analyzerVersion: "coach-report-v1",
+    sessionId: "session-1",
+    createdAt: "2026-05-26T00:00:00.000Z",
+    goalId: "projection",
+    goalLabel: "Voice Projection",
+    readinessScore: 84,
+    scores: {
+      projection: 86,
+      clarity: 80,
+      pacing: 82,
+      consistency: 88
+    },
+    summary: "Voice Projection is close to release-ready for this practice level.",
+    strengths: [
+      {
+        id: "coach-strength-projection",
+        category: "volume",
+        severity: "success",
+        title: "Projection is working",
+        detail: "Your calibrated volume stayed strong enough for this goal."
+      }
+    ],
+    priorities: [],
+    nextDrill: {
+      title: "Projection baseline drill",
+      detail: "Repeat the same prompt.",
+      steps: ["Keep the meter in the target zone."]
     }
   };
 }
