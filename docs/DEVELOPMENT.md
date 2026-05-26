@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.3.1` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, and transcript-aware Markdown exports.
+`0.3.2` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, and boosted review playback.
 
 ## Why Electron
 
@@ -29,7 +29,7 @@ SQLite can be introduced later when session search, filtering, analytics, or lon
 
 ## Why No Transcription Yet
 
-The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, and `0.3.1` made exported reports include that transcript feedback. Automatic offline transcription remains deferred until the review workflow is stable.
+The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.1` made exported reports include that transcript feedback, and `0.3.2` improved laptop microphone capture and review playback. Automatic offline transcription remains deferred until the review workflow is stable.
 
 ## Electron Launch Note
 

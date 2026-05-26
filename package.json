@@ -1,6 +1,6 @@
 {
   "name": "voicecoach-offline",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Offline-first Windows voice volume coaching prototype.",
   "productName": "VoiceCoach Offline",
   "author": "VoiceCoach Offline contributors",

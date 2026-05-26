@@ -10,6 +10,25 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.4.x`: optional offline transcription
 - `1.0.0`: stable public release
 
+## 0.3.2 - 2026-05-26
+
+Added:
+
+- enhanced microphone processing mode for laptop microphones that need auto gain or noise processing
+- natural microphone mode for raw input measurement
+- persistent settings for microphone processing and review playback boost
+- custom review audio player with a clearer progress bar
+- review playback boost from `1x` to `4x`
+- review playback speed controls
+
+Fixed:
+
+- quiet recordings are easier to review without changing the original saved `recording.webm`
+
+Tests:
+
+- added coverage for microphone constraint generation and playback boost clamping
+
 ## 0.3.1 - 2026-05-25
 
 Fixed:

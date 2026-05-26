@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   Mic,
+  Pause,
   Play,
   Radio,
   RotateCcw,
@@ -18,13 +19,14 @@ import {
   Volume2,
   Wand2
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   AppMeta,
   AppSettings,
   AudioReport,
   CalibrationProfile,
   LevelState,
+  MicrophoneProcessingMode,
   SavedSession,
   SessionMetadata,
   TranscriptDocument,
@@ -32,6 +34,12 @@ import {
   VolumeSample
 } from "../shared/types";
 import { createCalibrationProfile } from "./audio/calibration";
+import {
+  DEFAULT_MICROPHONE_PROCESSING_MODE,
+  DEFAULT_REVIEW_PLAYBACK_GAIN,
+  buildMicrophoneConstraints,
+  clampReviewPlaybackGain
+} from "./audio/constraints";
 import { analyzeSessionSamples, buildSessionSummary, reanalyzeSessionWithCalibration } from "./audio/events";
 import {
   calculateRms,
@@ -51,6 +59,7 @@ const CALIBRATION_TOTAL_MS = 23_000;
 const WARNING_LOW_MS = 1_500;
 const WARNING_COOLDOWN_MS = 5_000;
 const SAMPLE_INTERVAL_MS = 100;
+const PLAYBACK_RATES = [0.75, 1, 1.25, 1.5];
 
 const initialLevel = {
   db: -100,
@@ -71,6 +80,10 @@ export function App() {
   const [practiceTitle, setPracticeTitle] = useState("");
   const [practicePrompt, setPracticePrompt] = useState("");
   const [practiceNotes, setPracticeNotes] = useState("");
+  const [microphoneProcessingMode, setMicrophoneProcessingMode] = useState<MicrophoneProcessingMode>(
+    DEFAULT_MICROPHONE_PROCESSING_MODE
+  );
+  const [reviewPlaybackGain, setReviewPlaybackGain] = useState(DEFAULT_REVIEW_PLAYBACK_GAIN);
   const [level, setLevel] = useState(initialLevel);
   const [audioMode, setAudioMode] = useState<AudioMode>("idle");
   const [isRecording, setIsRecording] = useState(false);
@@ -119,6 +132,8 @@ export function App() {
       ]);
       setMeta(appMeta);
       setSettings(savedSettings);
+      setMicrophoneProcessingMode(savedSettings?.microphoneProcessingMode ?? DEFAULT_MICROPHONE_PROCESSING_MODE);
+      setReviewPlaybackGain(clampReviewPlaybackGain(savedSettings?.reviewPlaybackGain ?? DEFAULT_REVIEW_PLAYBACK_GAIN));
       setSelectedDeviceId(savedSettings?.selectedDeviceId ?? "");
       setCalibration(savedCalibration);
       setSessions(savedSessions);
@@ -146,19 +161,53 @@ export function App() {
 
   async function selectDevice(deviceId: string) {
     setSelectedDeviceId(deviceId);
-    const device = devices.find((item) => item.deviceId === deviceId);
-    const nextSettings: AppSettings = {
-      schemaVersion: 1,
-      selectedDeviceId: deviceId,
-      selectedDeviceLabel: device?.label || "Default microphone",
-      updatedAt: new Date().toISOString()
-    };
+    const nextSettings = buildAppSettings(deviceId, microphoneProcessingMode, reviewPlaybackGain);
     setSettings(nextSettings);
     try {
       await window.voiceCoach.saveSettings(nextSettings);
     } catch (settingsError) {
       setError(formatError(settingsError));
     }
+  }
+
+  async function selectMicrophoneProcessingMode(mode: MicrophoneProcessingMode) {
+    setMicrophoneProcessingMode(mode);
+    const nextSettings = buildAppSettings(selectedDeviceId, mode, reviewPlaybackGain);
+    setSettings(nextSettings);
+    try {
+      await window.voiceCoach.saveSettings(nextSettings);
+      setWarning(mode === "enhanced" ? "Enhanced microphone processing enabled" : "Natural microphone processing enabled");
+    } catch (settingsError) {
+      setError(formatError(settingsError));
+    }
+  }
+
+  async function updateReviewPlaybackGain(value: number) {
+    const gain = clampReviewPlaybackGain(value);
+    setReviewPlaybackGain(gain);
+    const nextSettings = buildAppSettings(selectedDeviceId, microphoneProcessingMode, gain);
+    setSettings(nextSettings);
+    try {
+      await window.voiceCoach.saveSettings(nextSettings);
+    } catch (settingsError) {
+      setError(formatError(settingsError));
+    }
+  }
+
+  function buildAppSettings(
+    deviceId: string,
+    processingMode: MicrophoneProcessingMode,
+    playbackGain: number
+  ): AppSettings {
+    const device = devices.find((item) => item.deviceId === deviceId);
+    return {
+      schemaVersion: 1,
+      selectedDeviceId: deviceId,
+      selectedDeviceLabel: device?.label || "Default microphone",
+      microphoneProcessingMode: processingMode,
+      reviewPlaybackGain: clampReviewPlaybackGain(playbackGain),
+      updatedAt: new Date().toISOString()
+    };
   }
 
   async function startCalibration() {
@@ -347,16 +396,7 @@ export function App() {
     stopMicrophone();
     await refreshDevices(false);
 
-    const constraints: MediaStreamConstraints = {
-      audio: {
-        deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      } as MediaTrackConstraints,
-      video: false
-    };
-
+    const constraints = buildMicrophoneConstraints(selectedDeviceId, microphoneProcessingMode);
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(stream);
@@ -544,7 +584,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.3.1"}</span>
+            <span>v{meta?.version ?? "0.3.2"}</span>
           </div>
         </div>
 
@@ -596,6 +636,8 @@ export function App() {
             profile={calibration}
             level={level}
             active={audioMode === "calibration"}
+            microphoneProcessingMode={microphoneProcessingMode}
+            onSelectMicrophoneProcessingMode={selectMicrophoneProcessingMode}
           />
         )}
 
@@ -628,6 +670,8 @@ export function App() {
             onRevealFolder={revealReviewFolder}
             onDeleteSession={deleteReviewSession}
             onSaveTranscript={saveReviewTranscript}
+            playbackGain={reviewPlaybackGain}
+            onPlaybackGainChange={updateReviewPlaybackGain}
           />
         )}
 
@@ -640,6 +684,10 @@ export function App() {
             onRefreshDevices={() => refreshDevices(true)}
             calibration={calibration}
             settings={settings}
+            microphoneProcessingMode={microphoneProcessingMode}
+            onSelectMicrophoneProcessingMode={selectMicrophoneProcessingMode}
+            reviewPlaybackGain={reviewPlaybackGain}
+            onReviewPlaybackGainChange={updateReviewPlaybackGain}
           />
         )}
       </main>
@@ -720,9 +768,11 @@ function CalibrationScreen({
   level,
   onRefreshDevices,
   onSelectDevice,
+  onSelectMicrophoneProcessingMode,
   onStartCalibration,
   progressPercent,
   profile,
+  microphoneProcessingMode,
   selectedDeviceId
 }: {
   active: boolean;
@@ -730,9 +780,11 @@ function CalibrationScreen({
   level: typeof initialLevel;
   onRefreshDevices: () => void;
   onSelectDevice: (id: string) => void;
+  onSelectMicrophoneProcessingMode: (mode: MicrophoneProcessingMode) => void;
   onStartCalibration: () => void;
   progressPercent: number;
   profile: CalibrationProfile | null;
+  microphoneProcessingMode: MicrophoneProcessingMode;
   selectedDeviceId: string;
 }) {
   return (
@@ -750,6 +802,10 @@ function CalibrationScreen({
           selectedDeviceId={selectedDeviceId}
           onSelectDevice={onSelectDevice}
           onRefreshDevices={onRefreshDevices}
+        />
+        <AudioProcessingControl
+          mode={microphoneProcessingMode}
+          onChange={onSelectMicrophoneProcessingMode}
         />
         <VolumeMeter level={level} calibration={profile} />
         <div className="progress-track" aria-label="Calibration progress">
@@ -864,15 +920,21 @@ function PracticeScreen({
   );
 }
 
+type ReviewAudioPlayerHandle = {
+  seekAndPlay: (ms: number) => void;
+};
+
 function ReviewScreen({
   calibration,
   onDeleteSession,
   onExportReport,
   onOpenSession,
+  onPlaybackGainChange,
   onReanalyzeSession,
   onRevealFolder,
   onSaveTranscript,
   onUpdateMetadata,
+  playbackGain,
   session,
   sessions
 }: {
@@ -880,14 +942,16 @@ function ReviewScreen({
   onDeleteSession: () => void;
   onExportReport: () => void;
   onOpenSession: (session: SavedSession) => void;
+  onPlaybackGainChange: (gain: number) => void;
   onReanalyzeSession: () => void;
   onRevealFolder: () => void;
   onSaveTranscript: (text: string) => void;
   onUpdateMetadata: (metadata: SessionMetadata) => void;
+  playbackGain: number;
   session: SavedSession | null;
   sessions: SavedSession[];
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioPlayerRef = useRef<ReviewAudioPlayerHandle | null>(null);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
@@ -910,10 +974,7 @@ function ReviewScreen({
   }
 
   function seekAudio(ms: number) {
-    if (audioRef.current) {
-      audioRef.current.currentTime = ms / 1000;
-      void audioRef.current.play();
-    }
+    audioPlayerRef.current?.seekAndPlay(ms);
   }
 
   function saveTranscript() {
@@ -970,10 +1031,12 @@ function ReviewScreen({
                 </button>
               </div>
             )}
-            <div className="audio-row">
-              <Play size={18} />
-              <audio ref={audioRef} controls src={session.recordingUrl} />
-            </div>
+            <ReviewAudioPlayer
+              ref={audioPlayerRef}
+              src={session.recordingUrl}
+              playbackGain={playbackGain}
+              onPlaybackGainChange={onPlaybackGainChange}
+            />
             <Timeline session={session.session} onSeek={seekAudio} />
             <div className="dashboard-grid">
               <Metric label="Duration" value={formatMs(session.session.durationMs)} />
@@ -1040,13 +1103,197 @@ function ReviewScreen({
   );
 }
 
+const ReviewAudioPlayer = forwardRef<
+  ReviewAudioPlayerHandle,
+  {
+    onPlaybackGainChange: (gain: number) => void;
+    playbackGain: number;
+    src: string;
+  }
+>(function ReviewAudioPlayer({ onPlaybackGainChange, playbackGain, src }, ref) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [playbackError, setPlaybackError] = useState("");
+
+  useImperativeHandle(ref, () => ({
+    seekAndPlay: (ms: number) => {
+      const audio = audioRef.current;
+      if (!audio) {
+        return;
+      }
+
+      audio.currentTime = Math.max(0, Math.min(duration || Number.MAX_SAFE_INTEGER, ms / 1000));
+      void playAudio();
+    }
+  }));
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.playbackRate = playbackRate;
+  }, [playbackRate]);
+
+  useEffect(() => {
+    if (gainRef.current) {
+      gainRef.current.gain.value = playbackGain;
+    }
+  }, [playbackGain]);
+
+  useEffect(() => {
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+    setPlaybackError("");
+  }, [src]);
+
+  useEffect(() => {
+    return () => {
+      sourceRef.current?.disconnect();
+      gainRef.current?.disconnect();
+      void audioContextRef.current?.close();
+    };
+  }, []);
+
+  async function ensureAudioGraph() {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    if (!audioContextRef.current) {
+      const AudioContextClass = window.AudioContext;
+      const audioContext = new AudioContextClass();
+      const source = audioContext.createMediaElementSource(audio);
+      const gain = audioContext.createGain();
+      source.connect(gain);
+      gain.connect(audioContext.destination);
+      audioContextRef.current = audioContext;
+      sourceRef.current = source;
+      gainRef.current = gain;
+    }
+
+    gainRef.current!.gain.value = playbackGain;
+    if (audioContextRef.current.state === "suspended") {
+      await audioContextRef.current.resume();
+    }
+  }
+
+  async function playAudio() {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    try {
+      setPlaybackError("");
+      await ensureAudioGraph();
+      await audio.play();
+    } catch (error) {
+      setPlaybackError(formatError(error));
+    }
+  }
+
+  function togglePlayback() {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    if (audio.paused) {
+      void playAudio();
+    } else {
+      audio.pause();
+    }
+  }
+
+  function seek(value: number) {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.currentTime = value;
+    setCurrentTime(value);
+  }
+
+  return (
+    <div className="review-player">
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        src={src}
+        onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+        onEnded={() => setIsPlaying(false)}
+        onPause={() => setIsPlaying(false)}
+        onPlay={() => setIsPlaying(true)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+      />
+      <div className="player-main-row">
+        <button className="player-play-button" onClick={togglePlayback} title={isPlaying ? "Pause" : "Play"}>
+          {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+        </button>
+        <span className="player-time">{formatMs(currentTime * 1000)}</span>
+        <input
+          className="player-seek"
+          type="range"
+          min={0}
+          max={Math.max(duration, currentTime, 0.01)}
+          step={0.01}
+          value={Math.min(currentTime, Math.max(duration, currentTime, 0.01))}
+          onChange={(event) => seek(Number(event.target.value))}
+          aria-label="Playback position"
+        />
+        <span className="player-time">{formatMs(duration * 1000)}</span>
+      </div>
+      <div className="player-controls-row">
+        <label className="gain-control">
+          <span>Boost {playbackGain.toFixed(2)}x</span>
+          <input
+            type="range"
+            min={1}
+            max={4}
+            step={0.25}
+            value={playbackGain}
+            onChange={(event) => onPlaybackGainChange(Number(event.target.value))}
+          />
+        </label>
+        <div className="rate-control" aria-label="Playback speed">
+          {PLAYBACK_RATES.map((rate) => (
+            <button
+              key={rate}
+              className={`rate-button ${playbackRate === rate ? "active" : ""}`}
+              onClick={() => setPlaybackRate(rate)}
+            >
+              {rate}x
+            </button>
+          ))}
+        </div>
+      </div>
+      {playbackError && <div className="player-error">{playbackError}</div>}
+    </div>
+  );
+});
+
 function SettingsScreen({
   calibration,
   devices,
   meta,
   onRefreshDevices,
   onSelectDevice,
+  onSelectMicrophoneProcessingMode,
+  onReviewPlaybackGainChange,
   selectedDeviceId,
+  microphoneProcessingMode,
+  reviewPlaybackGain,
   settings
 }: {
   calibration: CalibrationProfile | null;
@@ -1054,7 +1301,11 @@ function SettingsScreen({
   meta: AppMeta | null;
   onRefreshDevices: () => void;
   onSelectDevice: (id: string) => void;
+  onSelectMicrophoneProcessingMode: (mode: MicrophoneProcessingMode) => void;
+  onReviewPlaybackGainChange: (gain: number) => void;
   selectedDeviceId: string;
+  microphoneProcessingMode: MicrophoneProcessingMode;
+  reviewPlaybackGain: number;
   settings: AppSettings | null;
 }) {
   return (
@@ -1073,15 +1324,57 @@ function SettingsScreen({
           onSelectDevice={onSelectDevice}
           onRefreshDevices={onRefreshDevices}
         />
+        <AudioProcessingControl mode={microphoneProcessingMode} onChange={onSelectMicrophoneProcessingMode} />
+        <label className="settings-slider">
+          <span>Default review playback boost</span>
+          <input
+            type="range"
+            min={1}
+            max={4}
+            step={0.25}
+            value={reviewPlaybackGain}
+            onChange={(event) => onReviewPlaybackGainChange(Number(event.target.value))}
+          />
+          <strong>{reviewPlaybackGain.toFixed(2)}x</strong>
+        </label>
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.3.1"} />
+          <Metric label="Version" value={meta?.version ?? "0.3.2"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
+          <Metric label="Mic Processing" value={microphoneProcessingMode === "enhanced" ? "Enhanced" : "Natural"} />
           <Metric label="Calibration" value={calibration ? calibration.createdAt.slice(0, 10) : "Not saved"} />
         </div>
       </section>
     </section>
+  );
+}
+
+function AudioProcessingControl({
+  mode,
+  onChange
+}: {
+  mode: MicrophoneProcessingMode;
+  onChange: (mode: MicrophoneProcessingMode) => void;
+}) {
+  return (
+    <div className="processing-control">
+      <div>
+        <strong>Microphone processing</strong>
+        <span>
+          Enhanced allows echo cancellation, noise suppression, and auto gain. Natural records raw mic input for
+          stricter measurement.
+        </span>
+      </div>
+      <div className="segmented-control">
+        <button className={mode === "enhanced" ? "active" : ""} onClick={() => onChange("enhanced")}>
+          Enhanced
+        </button>
+        <button className={mode === "natural" ? "active" : ""} onClick={() => onChange("natural")}>
+          Natural
+        </button>
+      </div>
+    </div>
   );
 }
 

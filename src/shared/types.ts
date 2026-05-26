@@ -14,10 +14,14 @@ export type CalibrationProfile = {
   lowThresholdDb: number;
 };
 
+export type MicrophoneProcessingMode = "enhanced" | "natural";
+
 export type AppSettings = {
   schemaVersion: 1;
   selectedDeviceId: string;
   selectedDeviceLabel: string;
+  microphoneProcessingMode?: MicrophoneProcessingMode;
+  reviewPlaybackGain?: number;
   updatedAt: string;
 };
 

@@ -2,7 +2,7 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger and clearer speaking volume.
 
-Current version: `0.3.1`
+Current version: `0.3.2`
 
 This release is an audio-coaching prototype. It proves the core loop:
 
@@ -12,17 +12,19 @@ This release is an audio-coaching prototype. It proves the core loop:
 - save local session JSON and `recording.webm`
 - review saved timeline markers
 
-No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.1`.
+No internet, cloud service, automatic transcription, camera recording, screen recording, or SQLite database is used in `0.3.2`.
 
-## What's New in 0.3.1
+## What's New in 0.3.2
 
-- exported Markdown reports now include manual transcript text
-- exported Markdown reports now include local transcript metrics and suggestions
-- empty transcript analysis now shows an actionable message
+- enhanced microphone mode now allows browser/Windows echo cancellation, noise suppression, and auto gain
+- natural microphone mode remains available for raw mic measurement
+- review playback now has a clearer custom play bar
+- review playback boost can raise quiet recordings up to `4x`
+- review playback speed controls support `0.75x`, `1x`, `1.25x`, and `1.5x`
 
 ## Project Status
 
-`0.3.1` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
+`0.3.2` is below the final product target. The goal is to iterate through `0.x` versions until the app is reliable enough for `1.0.0`.
 
 Planned future work:
 
@@ -79,7 +81,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.3.1.exe
+release/VoiceCoach Offline 0.3.2.exe
 ```
 
 Unpacked builds are written to:
@@ -120,7 +122,7 @@ Session and calibration files use `schemaVersion: 1`.
 
 ## Privacy
 
-`0.3.1` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
+`0.3.2` is fully offline. Audio recordings, transcripts, suggestions, and session metadata stay on the user's PC.
 
 ## License
 

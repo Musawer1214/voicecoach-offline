@@ -49,6 +49,7 @@ VoiceCoach Offline v0.1.1
 VoiceCoach Offline v0.2.0
 VoiceCoach Offline v0.3.0
 VoiceCoach Offline v0.3.1
+VoiceCoach Offline v0.3.2
 ```
 
 ## Release Notes Template

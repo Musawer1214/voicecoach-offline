@@ -121,6 +121,12 @@ Audio analysis:
 - values are smoothed before display
 - samples are stored every 100 ms
 
+Microphone processing:
+
+- enhanced mode enables browser/device echo cancellation, noise suppression, and auto gain
+- natural mode disables those processing flags for raw mic measurement
+- enhanced mode is the default because laptop microphone arrays often record too quietly without automatic gain
+
 Calibration:
 
 - first 3 seconds estimate the noise floor
