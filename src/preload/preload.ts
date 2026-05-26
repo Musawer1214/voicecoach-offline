@@ -33,6 +33,7 @@ const api: VoiceCoachApi = {
   deleteSession: (payload: SessionIdPayload) => ipcRenderer.invoke("sessions:delete", payload) as Promise<void>,
   exportSessionReport: (payload: SessionIdPayload) =>
     ipcRenderer.invoke("sessions:export-report", payload) as Promise<string>,
+  exportProgressReport: () => ipcRenderer.invoke("sessions:export-progress") as Promise<string>,
   revealSessionFolder: (payload: SessionIdPayload) =>
     ipcRenderer.invoke("sessions:reveal-folder", payload) as Promise<string>
 };

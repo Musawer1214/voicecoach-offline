@@ -3,6 +3,7 @@ import path from "node:path";
 import {
   deleteSession,
   ensureDataDirs,
+  exportProgressReport,
   exportSessionReport,
   getDataDir,
   listSessions,
@@ -97,5 +98,6 @@ function registerIpcHandlers(): void {
   );
   ipcMain.handle("sessions:delete", (_event, payload: SessionIdPayload) => deleteSession(payload));
   ipcMain.handle("sessions:export-report", (_event, payload: SessionIdPayload) => exportSessionReport(payload));
+  ipcMain.handle("sessions:export-progress", () => exportProgressReport());
   ipcMain.handle("sessions:reveal-folder", (_event, payload: SessionIdPayload) => revealSessionFolder(payload));
 }

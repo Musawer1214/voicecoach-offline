@@ -43,6 +43,7 @@ Responsibilities:
 - recording controls
 - review screen and timeline display
 - Coach Mode scoring and progress display
+- Progress Coach aggregation and progress export
 
 Key files:
 
@@ -53,6 +54,7 @@ Key files:
 - `src/renderer/audio/report.ts`
 - `src/renderer/coach/coach.ts`
 - `src/renderer/text/suggestions.ts`
+- `src/shared/progress.ts`
 
 ## Local Data Contract
 
@@ -61,6 +63,7 @@ Data is stored locally under Electron's user data path:
 ```text
 VoiceCoachData/
   calibration.json
+  settings.json
   sessions/
     <session-date>/
       recording.webm
@@ -70,6 +73,7 @@ VoiceCoachData/
       transcript.json
       suggestions.json
       report.md
+  progress-report.md
 ```
 
 `calibration.json`:
@@ -188,6 +192,24 @@ The readiness score is weighted by the selected practice goal:
 - Pacing Control emphasizes speaking ratio and pause control
 - Interview Answer balances volume, clarity, pacing, and consistency
 - Confident Delivery emphasizes projection and consistency
+
+## Progress Coach Pipeline
+
+Progress Coach aggregates existing local session artifacts without adding a database:
+
+```text
+sessions/*/session.json
+sessions/*/coach-report.json
+sessions/*/transcript.json
+  -> Progress screen
+  -> progress-report.md
+```
+
+The aggregation is deterministic and local. It reports session count, total practice time, average readiness, best readiness, transcript coverage, per-goal summaries, and weakest skill trends.
+
+## Windows Speech Input
+
+VoiceCoach does not own a Windows speech-to-text engine in `0.5.0`. The review screen can focus the transcript field so the user can dictate with Windows voice typing or Windows Voice Access. The saved transcript source records whether text came from manual entry or Windows speech-assisted entry.
 
 ## Security Defaults
 

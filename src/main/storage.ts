@@ -24,6 +24,7 @@ import {
   isVoiceCoachSession
 } from "../shared/types.js";
 import { buildMarkdownReport } from "../shared/markdownReport.js";
+import { buildProgressMarkdown, buildProgressSummary } from "../shared/progress.js";
 
 const DATA_DIR_NAME = "VoiceCoachData";
 const CALIBRATION_FILE = "calibration.json";
@@ -265,6 +266,14 @@ export async function exportSessionReport(payload: SessionIdPayload): Promise<st
     buildMarkdownReport(found.session, extras.report, extras.transcript, extras.textSuggestions, extras.coachReport),
     "utf8"
   );
+  return exportPath;
+}
+
+export async function exportProgressReport(): Promise<string> {
+  const sessions = await listSessions();
+  const summary = buildProgressSummary(sessions);
+  const exportPath = path.join(getDataDir(), "progress-report.md");
+  await writeFile(exportPath, buildProgressMarkdown(summary), "utf8");
   return exportPath;
 }
 

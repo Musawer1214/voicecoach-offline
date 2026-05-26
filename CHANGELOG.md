@@ -8,7 +8,27 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.2.x`: offline audio reports
 - `0.3.x`: transcript and local suggestions
 - `0.4.x`: Coach Mode and product polish
+- `0.5.x`: Progress Coach and assisted transcript entry
 - `1.0.0`: stable public release
+
+## 0.5.0 - 2026-05-26
+
+Added:
+
+- Progress screen with readiness trends, goal summaries, transcript coverage, weakest-skill focus, and session history
+- exportable local `progress-report.md`
+- shared progress aggregation model and tests
+- Windows speech input helper for the transcript editor
+- transcript source tracking for manual vs Windows speech-assisted text entry
+
+Changed:
+
+- README now presents the project as the `0.5.0` Progress Coach release
+- docs clarify the difference between app-owned transcription and optional Windows speech input
+
+Tests:
+
+- added coverage for progress summary aggregation and Markdown export
 
 ## 0.4.0 - 2026-05-26
 

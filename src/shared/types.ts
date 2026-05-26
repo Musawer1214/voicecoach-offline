@@ -111,7 +111,7 @@ export type AudioReport = {
 export type TranscriptDocument = {
   schemaVersion: 1;
   sessionId: string;
-  source: "manual";
+  source: "manual" | "windows_dictation";
   text: string;
   updatedAt: string;
 };
@@ -238,6 +238,7 @@ export type VoiceCoachApi = {
   saveCoachReport(payload: SaveCoachReportPayload): Promise<SavedSession>;
   deleteSession(payload: SessionIdPayload): Promise<void>;
   exportSessionReport(payload: SessionIdPayload): Promise<string>;
+  exportProgressReport(): Promise<string>;
   revealSessionFolder(payload: SessionIdPayload): Promise<string>;
 };
 
@@ -295,7 +296,7 @@ export function isTranscriptDocument(value: unknown): value is TranscriptDocumen
   return (
     candidate.schemaVersion === TRANSCRIPT_SCHEMA_VERSION &&
     typeof candidate.sessionId === "string" &&
-    candidate.source === "manual" &&
+    (candidate.source === "manual" || candidate.source === "windows_dictation") &&
     typeof candidate.text === "string" &&
     typeof candidate.updatedAt === "string"
   );

@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.4.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, and progress summaries.
+`0.5.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, and Windows speech-assisted transcript entry.
 
 ## Why Electron
 
@@ -29,7 +29,7 @@ SQLite can be introduced later when session search, filtering, analytics, or lon
 
 ## Why No Transcription Yet
 
-The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.2` improved laptop microphone capture and review playback, and `0.4.0` added Coach Mode on top of those reliable local artifacts. Automatic offline transcription remains deferred until the app is stable enough for larger model, packaging, and performance work.
+The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.2` improved laptop microphone capture and review playback, `0.4.0` added Coach Mode, and `0.5.0` added progress tracking on top of those local artifacts. Automatic app-owned transcription remains deferred until the app is stable enough for native Windows or bundled model work.
 
 ## Electron Launch Note
 
@@ -67,6 +67,9 @@ Before marking a version ready:
 - confirm review screen can play the recording
 - confirm Coach Mode scorecard appears in review
 - confirm Update Coach refreshes older sessions
+- confirm Progress screen shows trend and goal summary
+- confirm Export Progress writes `progress-report.md`
+- confirm Windows speech helper focuses the transcript editor
 - confirm exported Markdown includes Coach Mode
 - confirm session files are saved locally
 - run `npm test`

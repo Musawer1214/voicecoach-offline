@@ -4,9 +4,9 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio-only practice sessions, gives live low-volume feedback, and saves local review reports.
 
-Current version: `0.4.0`
+Current version: `0.5.0`
 
-`0.4.0` is the major Coach Mode release before the planned `1.0.0` stabilization release.
+`0.5.0` is the Progress Coach release before the planned `1.0.0` stabilization release.
 
 ## Highlights
 
@@ -15,18 +15,20 @@ Current version: `0.4.0`
 - Audio-only local recording with `recording.webm` session files.
 - Coach Mode goals for projection, clarity, pacing, interview answers, and confident delivery.
 - Local scorecards for projection, clarity, pacing, consistency, and readiness.
+- Progress dashboard with readiness trends, goal summaries, and next-practice focus.
 - Manual transcript analysis for filler words, repeated phrases, long sentences, and weak openings.
+- Windows speech input helper for using Win+H voice typing or Voice Access inside the transcript box.
 - Exportable Markdown review reports.
+- Exportable Markdown progress reports.
 - Windows unpacked and portable build scripts.
 
-## What's New in 0.4.0
+## What's New in 0.5.0
 
-- New Coach screen with guided practice goals and recent progress.
-- New `coach-report.json` per session with score breakdowns, strengths, priorities, and next-drill steps.
-- Practice sessions now save the active goal with session metadata.
-- Review now shows a Coach Mode scorecard and can refresh coach analysis for older sessions.
-- Markdown exports now include Coach Mode summaries.
-- Added project branding assets and brand documentation for GitHub presentation.
+- New Progress screen with session history, readiness trend bars, goal summaries, and weakest-skill focus.
+- New progress Markdown export saved as `progress-report.md`.
+- Added shared progress aggregation and tests.
+- Added Windows speech input helper in the review transcript panel.
+- Transcript source can now be saved as `manual` or `windows_dictation`.
 
 ## Status
 
@@ -88,7 +90,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.4.0.exe
+release/VoiceCoach Offline 0.5.0.exe
 ```
 
 Unpacked builds are written to:
@@ -116,6 +118,7 @@ VoiceCoachData/
       transcript.json
       suggestions.json
       report.md
+  progress-report.md
 ```
 
 Session, calibration, report, coach, transcript, and suggestion files use `schemaVersion: 1`.
@@ -124,19 +127,22 @@ Session, calibration, report, coach, transcript, and suggestion files use `schem
 
 VoiceCoach Offline is designed for local practice. Audio recordings, transcripts, scorecards, suggestions, and session metadata stay on the user's PC. The app does not require internet access for its current features.
 
+Windows speech input is optional. VoiceCoach does not bundle or secretly call a speech-to-text service. The review screen simply focuses the transcript box so Windows voice typing or Windows Voice Access can enter text there if you choose to use those Windows features.
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Brand Notes](docs/BRAND.md)
 - [Development Notes](docs/DEVELOPMENT.md)
 - [Grammar Feedback Roadmap](docs/GRAMMAR_FEEDBACK_ROADMAP.md)
+- [Windows Speech Notes](docs/WINDOWS_SPEECH.md)
 - [Versioning](docs/VERSIONING.md)
 - [GitHub Setup](docs/GITHUB_SETUP.md)
 - [Changelog](CHANGELOG.md)
 
 ## Roadmap
 
-- `0.4.x`: Coach Mode fixes and UX refinements.
+- `0.5.x`: Progress Coach fixes, export polish, and Windows speech-input experiments.
 - `1.0.0`: stable offline speaking coach release.
 - Post-`1.0.0`: evaluate optional local transcription if model size, speed, accuracy, and packaging are acceptable.
 

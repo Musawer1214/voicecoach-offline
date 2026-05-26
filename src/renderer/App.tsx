@@ -6,6 +6,7 @@ import {
   ExternalLink,
   FileText,
   FolderOpen,
+  Keyboard,
   Mic,
   Pause,
   Play,
@@ -39,6 +40,7 @@ import {
   VoiceCoachSession,
   VolumeSample
 } from "../shared/types";
+import { ProgressSummary, buildProgressSummary } from "../shared/progress";
 import { createCalibrationProfile } from "./audio/calibration";
 import {
   DEFAULT_MICROPHONE_PROCESSING_MODE,
@@ -59,7 +61,7 @@ import { buildAudioReport } from "./audio/report";
 import { PRACTICE_GOALS, buildCoachReport, resolvePracticeGoal } from "./coach/coach";
 import { buildTextSuggestions } from "./text/suggestions";
 
-type Screen = "home" | "coach" | "calibration" | "practice" | "review" | "settings";
+type Screen = "home" | "coach" | "progress" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
 
 const CALIBRATION_TOTAL_MS = 23_000;
@@ -519,6 +521,16 @@ export function App() {
     }
   }
 
+  async function exportProgressReport() {
+    try {
+      setError("");
+      const exportPath = await window.voiceCoach.exportProgressReport();
+      setWarning(`Progress report exported: ${exportPath}`);
+    } catch (exportError) {
+      setError(formatError(exportError));
+    }
+  }
+
   async function revealReviewFolder() {
     if (!reviewSession) {
       return;
@@ -554,7 +566,7 @@ export function App() {
     }
   }
 
-  async function saveReviewTranscript(text: string) {
+  async function saveReviewTranscript(text: string, source: TranscriptDocument["source"]) {
     if (!reviewSession) {
       return;
     }
@@ -564,7 +576,7 @@ export function App() {
       const transcript: TranscriptDocument = {
         schemaVersion: 1,
         sessionId: reviewSession.session.id,
-        source: "manual",
+        source,
         text,
         updatedAt: new Date().toISOString()
       };
@@ -621,7 +633,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.4.0"}</span>
+            <span>v{meta?.version ?? "0.5.0"}</span>
           </div>
         </div>
 
@@ -631,6 +643,9 @@ export function App() {
           </NavButton>
           <NavButton icon={<Target />} active={screen === "coach"} onClick={() => setScreen("coach")}>
             Coach
+          </NavButton>
+          <NavButton icon={<TrendingUp />} active={screen === "progress"} onClick={() => setScreen("progress")}>
+            Progress
           </NavButton>
           <NavButton icon={<Wand2 />} active={screen === "calibration"} onClick={() => setScreen("calibration")}>
             Calibration
@@ -669,6 +684,15 @@ export function App() {
           <CoachScreen
             goalId={practiceGoalId}
             onGoalChange={setPracticeGoalId}
+            onOpenSession={openSession}
+            onStartPractice={preparePractice}
+            sessions={sessions}
+          />
+        )}
+
+        {screen === "progress" && (
+          <ProgressScreen
+            onExportProgress={exportProgressReport}
             onOpenSession={openSession}
             onStartPractice={preparePractice}
             sessions={sessions}
@@ -927,6 +951,148 @@ function CoachScreen({
   );
 }
 
+function ProgressScreen({
+  onExportProgress,
+  onOpenSession,
+  onStartPractice,
+  sessions
+}: {
+  onExportProgress: () => void;
+  onOpenSession: (session: SavedSession) => void;
+  onStartPractice: () => void;
+  sessions: SavedSession[];
+}) {
+  const summary = useMemo(() => buildProgressSummary(sessions), [sessions]);
+  const latestRecord = summary.records.find((record) => record.readinessScore !== null);
+  const matchingLatestSession = latestRecord
+    ? sessions.find((session) => session.session.id === latestRecord.id)
+    : null;
+
+  return (
+    <section className="screen">
+      <header className="screen-header">
+        <div>
+          <h1>Progress Coach</h1>
+          <p>Track improvement across saved sessions and use the weakest area to choose the next practice pass.</p>
+        </div>
+        <div className="header-actions">
+          <button className="secondary-button" onClick={onExportProgress} disabled={summary.sessionCount === 0}>
+            <Download size={18} /> Export Progress
+          </button>
+          <button className="primary-button" onClick={onStartPractice}>
+            <Mic size={18} /> Practice Again
+          </button>
+        </div>
+      </header>
+
+      <div className="dashboard-grid">
+        <Metric label="Sessions" value={String(summary.sessionCount)} />
+        <Metric label="Average Readiness" value={formatNullableScore(summary.averageReadinessScore)} />
+        <Metric label="Best Readiness" value={formatNullableScore(summary.bestReadinessScore)} />
+        <Metric label="Transcript Coverage" value={`${summary.transcriptCoveragePercent}%`} />
+      </div>
+
+      <section className="coach-overview">
+        <div className="coach-summary-panel">
+          <div className="panel-title">
+            <TrendingUp size={18} />
+            <h2>Readiness Trend</h2>
+          </div>
+          {summary.records.some((record) => record.readinessScore !== null) ? (
+            <ProgressTrend summary={summary} onOpenSession={onOpenSession} sessions={sessions} />
+          ) : (
+            <div className="empty-state">No Coach Mode scores yet.</div>
+          )}
+        </div>
+
+        <div className="coach-summary-panel">
+          <div className="panel-title">
+            <Target size={18} />
+            <h2>Next Practice Focus</h2>
+          </div>
+          {matchingLatestSession?.coachReport ? (
+            <div className="next-drill">
+              <span className="focus-label">Weakest current trend: {formatSkillLabel(summary.weakestSkill)}</span>
+              <strong>{matchingLatestSession.coachReport.nextDrill.title}</strong>
+              <p>{matchingLatestSession.coachReport.nextDrill.detail}</p>
+              <ol>
+                {matchingLatestSession.coachReport.nextDrill.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <div className="empty-state">Record a coached session to unlock a next-practice drill.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title">
+          <Trophy size={18} />
+          <h2>Goal Progress</h2>
+        </div>
+        <div className="goal-progress-grid">
+          {summary.goals.length > 0 ? (
+            summary.goals.map((goal) => (
+              <div className="goal-progress-card" key={goal.goalId}>
+                <strong>{goal.goalLabel}</strong>
+                <span>{goal.sessionCount} session{goal.sessionCount === 1 ? "" : "s"}</span>
+                <ProgressBar value={goal.averageReadinessScore ?? 0} />
+                <em>Avg {formatNullableScore(goal.averageReadinessScore)} · Weakest {formatSkillLabel(goal.weakestSkill)}</em>
+              </div>
+            ))
+          ) : (
+            <div className="empty-state">No goal history yet.</div>
+          )}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-title">
+          <FolderOpen size={18} />
+          <h2>History</h2>
+        </div>
+        <SessionList sessions={sessions} onOpenSession={onOpenSession} />
+      </section>
+    </section>
+  );
+}
+
+function ProgressTrend({
+  onOpenSession,
+  sessions,
+  summary
+}: {
+  onOpenSession: (session: SavedSession) => void;
+  sessions: SavedSession[];
+  summary: ProgressSummary;
+}) {
+  const records = [...summary.records]
+    .filter((record) => record.readinessScore !== null)
+    .reverse()
+    .slice(-12);
+
+  return (
+    <div className="progress-trend">
+      {records.map((record) => {
+        const saved = sessions.find((session) => session.session.id === record.id);
+        return (
+          <button
+            key={record.id}
+            className="progress-trend-bar"
+            onClick={() => saved && onOpenSession(saved)}
+            style={{ height: `${Math.max(12, record.readinessScore ?? 0)}%` }}
+            title={`${record.title}: ${record.readinessScore}/100`}
+          >
+            <span>{record.readinessScore}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function GoalSelector({
   activeGoalId,
   disabled = false,
@@ -1174,7 +1340,7 @@ function ReviewScreen({
   onReanalyzeSession: () => void;
   onRefreshCoachReport: () => void;
   onRevealFolder: () => void;
-  onSaveTranscript: (text: string) => void;
+  onSaveTranscript: (text: string, source: TranscriptDocument["source"]) => void;
   onUpdateMetadata: (metadata: SessionMetadata) => void;
   playbackGain: number;
   session: SavedSession | null;
@@ -1185,6 +1351,9 @@ function ReviewScreen({
   const [draftPrompt, setDraftPrompt] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [draftTranscript, setDraftTranscript] = useState("");
+  const [draftTranscriptSource, setDraftTranscriptSource] =
+    useState<TranscriptDocument["source"]>("manual");
+  const transcriptRef = useRef<HTMLTextAreaElement | null>(null);
   const hasCalibrationGap = Boolean(session && session.session.calibrationId === null);
   const hasCalibrationMismatch = Boolean(
     session?.session.calibrationId && calibration && session.session.calibrationId !== calibration.id
@@ -1196,6 +1365,7 @@ function ReviewScreen({
     setDraftPrompt(session?.session.metadata?.prompt ?? "");
     setDraftNotes(session?.session.metadata?.notes ?? "");
     setDraftTranscript(session?.transcript?.text ?? "");
+    setDraftTranscriptSource(session?.transcript?.source ?? "manual");
   }, [session?.session.id]);
 
   function saveMetadata() {
@@ -1215,7 +1385,12 @@ function ReviewScreen({
   }
 
   function saveTranscript() {
-    onSaveTranscript(draftTranscript);
+    onSaveTranscript(draftTranscript, draftTranscriptSource);
+  }
+
+  function startWindowsDictation() {
+    setDraftTranscriptSource("windows_dictation");
+    transcriptRef.current?.focus();
   }
 
   return (
@@ -1318,12 +1493,27 @@ function ReviewScreen({
                 <FileText size={18} />
                 <h2>Manual Transcript</h2>
               </div>
+              <div className="dictation-helper">
+                <div>
+                  <strong>Windows speech input</strong>
+                  <span>
+                    Focus the transcript box, then use Win+H voice typing or Windows Voice Access. Save after text appears.
+                  </span>
+                </div>
+                <button className="secondary-button compact-button" onClick={startWindowsDictation}>
+                  <Keyboard size={16} /> Use Windows Speech
+                </button>
+              </div>
               <textarea
+                ref={transcriptRef}
                 value={draftTranscript}
                 onChange={(event) => setDraftTranscript(event.target.value)}
                 placeholder="Paste or type the transcript here. VoiceCoach will run local grammar and clarity checks."
               />
               <div className="row-actions">
+                <span className="source-pill">
+                  Source: {draftTranscriptSource === "windows_dictation" ? "Windows speech input" : "Manual"}
+                </span>
                 <button className="secondary-button compact-button" onClick={saveTranscript}>
                   <Save size={16} /> Save and Analyze
                 </button>
@@ -1927,6 +2117,14 @@ function formatAverageScore(values: Array<number | null | undefined>): string {
   }
 
   return `${Math.round(scores.reduce((total, value) => total + value, 0) / scores.length)}/100`;
+}
+
+function formatNullableScore(value: number | null): string {
+  return value === null ? "--" : `${value}/100`;
+}
+
+function formatSkillLabel(value: keyof CoachReport["scores"] | null): string {
+  return value ? value[0].toUpperCase() + value.slice(1) : "--";
 }
 
 function formatError(error: unknown): string {

@@ -435,9 +435,67 @@ button:disabled {
 .score-bars,
 .trend-list,
 .suggestion-column,
-.next-drill {
+.next-drill,
+.goal-progress-grid {
   display: grid;
   gap: 10px;
+}
+
+.progress-trend {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  min-height: 190px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.progress-trend-bar {
+  display: flex;
+  flex: 1 1 24px;
+  min-width: 18px;
+  align-items: start;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px 6px 2px 2px;
+  color: #042f2e;
+  background: #14b8a6;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.progress-trend-bar:hover {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.goal-progress-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.goal-progress-card {
+  display: grid;
+  gap: 8px;
+  min-height: 126px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.goal-progress-card strong {
+  color: #111827;
+}
+
+.goal-progress-card span,
+.goal-progress-card em,
+.focus-label {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
 }
 
 .score-row,
@@ -509,6 +567,44 @@ button:disabled {
   padding-left: 20px;
   color: #475569;
   line-height: 1.5;
+}
+
+.dictation-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.dictation-helper div {
+  display: grid;
+  gap: 4px;
+}
+
+.dictation-helper strong {
+  color: #1e3a8a;
+}
+
+.dictation-helper span {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .session-setup-panel label,
@@ -1034,7 +1130,13 @@ button:disabled {
   .settings-grid,
   .goal-selector,
   .coach-overview,
-  .coach-columns {
+  .coach-columns,
+  .goal-progress-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dictation-helper {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

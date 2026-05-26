@@ -29,9 +29,9 @@ Avoid wording like:
 - "Bad grammar"
 - "Failed"
 
-## Current Status in `0.4.0`
+## Current Status in `0.5.0`
 
-`0.4.0` keeps grammar and clarity feedback offline without automatic transcription, then combines manual transcript signals with audio scoring inside Coach Mode.
+`0.5.0` keeps grammar and clarity feedback offline without automatic app-owned transcription, combines manual transcript signals with audio scoring inside Coach Mode, and supports Windows speech-assisted transcript entry.
 
 Added:
 
@@ -47,6 +47,8 @@ Still deferred:
 - automatic offline speech-to-text
 - bundled Whisper model or binary
 - timestamped transcript segments
+
+`0.5.0` adds Windows speech-assisted transcript entry. This is not an app-owned transcription engine; it lets Windows voice typing or Windows Voice Access enter text into the transcript box.
 
 ## Required Prerequisite: Offline Transcription
 
