@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.6.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, and built-in Windows speech transcription when the local recognizer is available.
+`0.7.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, and a simplified UI flow for new users.
 
 ## Why Electron
 
@@ -32,6 +32,8 @@ SQLite can be introduced later when session search, filtering, analytics, or lon
 The first risk was whether live volume coaching is useful and reliable. `0.2.0` added audio reports, `0.3.0` added manual transcript suggestions, `0.3.2` improved laptop microphone capture and review playback, `0.4.0` added Coach Mode, and `0.5.0` added progress tracking on top of those local artifacts.
 
 `0.6.0` adds built-in transcription through a narrow provider bridge instead of automating the Windows `Win+H` overlay. The first provider uses Windows `System.Speech` through a local helper process. If this provider is not reliable enough on every Windows 11 machine, the same app contract can accept a native Windows Runtime helper or a bundled open-source model later.
+
+`0.7.0` does not add new capture models. It simplifies the user flow with progressive disclosure so new users can see the next action first while advanced camera, microphone, transcript, file, and metadata controls remain available.
 
 ## Electron Launch Note
 
@@ -76,6 +78,7 @@ Before marking a version ready:
 - confirm Progress screen shows trend and goal summary
 - confirm Export Progress writes `progress-report.md`
 - confirm Windows speech helper focuses the transcript editor
+- confirm advanced capture, transcript, and file tools remain available inside disclosure sections
 - confirm exported Markdown includes Coach Mode
 - confirm session files are saved locally
 - run `npm test`

@@ -44,6 +44,7 @@ Responsibilities:
 - review screen and timeline display
 - Coach Mode scoring and progress display
 - Progress Coach aggregation and progress export
+- progressive disclosure for advanced UI controls
 
 Key files:
 
@@ -55,6 +56,21 @@ Key files:
 - `src/renderer/coach/coach.ts`
 - `src/renderer/text/suggestions.ts`
 - `src/shared/progress.ts`
+
+## UI Flow
+
+`0.7.0` organizes the renderer around a simpler beginner path:
+
+```text
+Home -> Practice -> Review -> Progress
+```
+
+Advanced controls remain in the app, but are grouped behind disclosure sections:
+
+- calibration keeps microphone selection and the live meter visible, with processing and numeric threshold details collapsed
+- practice keeps the camera/meter/recording surface visible, with capture options and prompts collapsed
+- review keeps playback, timeline, summary metrics, and Coach Mode feedback visible, with reports, transcript tools, metadata, and file paths collapsed
+- settings groups device, camera/transcription, and playback/app information into separate sections
 
 ## Local Data Contract
 

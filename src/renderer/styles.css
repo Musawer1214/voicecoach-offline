@@ -164,6 +164,21 @@ p {
   gap: 12px;
 }
 
+.panel-title {
+  flex-wrap: wrap;
+}
+
+.panel-meta,
+.helper-text {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel-meta {
+  margin-left: auto;
+}
+
 .primary-button,
 .secondary-button,
 .stop-button,
@@ -268,6 +283,131 @@ button:disabled {
   gap: 14px;
 }
 
+.quick-start-panel {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 12px;
+}
+
+.quick-step {
+  display: grid;
+  gap: 4px;
+  min-height: 86px;
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  padding: 16px;
+  color: #111827;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.quick-step span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quick-step strong {
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.quick-step:hover {
+  border-color: #14b8a6;
+}
+
+.quick-step.primary-step {
+  color: #042f2e;
+  border-color: #14b8a6;
+  background: #ccfbf1;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  background: #dde5ef;
+}
+
+.summary-strip div {
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  padding: 14px;
+  background: #ffffff;
+}
+
+.summary-strip span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.summary-strip strong {
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.disclosure-section {
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.disclosure-section summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 20px;
+  align-items: center;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.disclosure-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure-section summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #111827;
+  font-weight: 800;
+}
+
+.disclosure-section summary > em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.disclosure-chevron {
+  color: #64748b;
+  transition: transform 120ms ease;
+}
+
+.disclosure-section[open] .disclosure-chevron {
+  transform: rotate(180deg);
+}
+
+.disclosure-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-top: 1px solid #edf1f7;
+}
+
 .review-actions {
   display: flex;
   flex-wrap: wrap;
@@ -278,21 +418,21 @@ button:disabled {
 .panel,
 .metric,
 .practice-surface {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #dde5ef;
   border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+  box-shadow: none;
 }
 
 .panel {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: 16px;
+  padding: 18px;
 }
 
 .metric {
-  min-height: 88px;
-  padding: 16px;
+  min-height: 76px;
+  padding: 14px;
 }
 
 .metric span {
@@ -387,16 +527,16 @@ button:disabled {
 .goal-selector {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .goal-card {
   display: grid;
-  gap: 8px;
-  min-height: 118px;
+  gap: 5px;
+  min-height: 92px;
   border: 1px solid #dbe3ee;
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
   color: #1f2937;
   background: #ffffff;
   cursor: pointer;
@@ -409,6 +549,7 @@ button:disabled {
 
 .goal-card small {
   color: #64748b;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -765,9 +906,9 @@ button:disabled {
 .practice-surface {
   display: grid;
   place-items: center;
-  gap: 22px;
-  min-height: 520px;
-  padding: 42px;
+  gap: 18px;
+  min-height: 430px;
+  padding: 30px;
 }
 
 .camera-preview-shell {
@@ -1251,6 +1392,8 @@ button:disabled {
   .dashboard-grid,
   .stats-panel,
   .settings-grid,
+  .quick-start-panel,
+  .summary-strip,
   .goal-selector,
   .coach-overview,
   .coach-columns,
@@ -1263,5 +1406,13 @@ button:disabled {
   .dictation-helper {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .disclosure-section summary {
+    grid-template-columns: minmax(0, 1fr) 20px;
+  }
+
+  .disclosure-section summary > em {
+    display: none;
   }
 }

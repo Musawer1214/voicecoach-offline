@@ -4,9 +4,9 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio or camera practice sessions, gives live low-volume feedback, captures built-in speech transcripts when available, and saves local review reports.
 
-Current version: `0.6.0`
+Current version: `0.7.0`
 
-`0.6.0` is the Camera Sessions and Built-in Transcription release before the planned `1.0.0` stabilization release.
+`0.7.0` is the Simplified Practice UI release before the planned `1.0.0` stabilization release.
 
 ## Highlights
 
@@ -24,13 +24,13 @@ Current version: `0.6.0`
 - Exportable Markdown progress reports.
 - Windows unpacked and portable build scripts.
 
-## What's New in 0.6.0
+## What's New in 0.7.0
 
-- Camera practice sessions with live preview, camera selector, resolution, frame-rate, and mirror controls.
-- Video review playback for camera sessions while keeping boosted audio review controls.
-- Built-in Windows speech transcription provider using the local `System.Speech` recognizer when it is available.
-- Live transcript preview during recording and automatic final `transcript.json` save after recording.
-- Session schema now records `recordingKind`, camera device metadata, and camera settings.
+- Cleaner home screen with quick Practice, Calibration, and Progress actions.
+- Practice screen now puts the live camera/meter/recording surface first.
+- Camera, transcription, prompts, microphone processing, and metadata are now organized under collapsible sections.
+- Review screen keeps playback, timeline, summary, and coach feedback visible while moving deeper details behind disclosure panels.
+- Settings are grouped into microphone, camera/transcription, and playback/app info sections.
 
 ## Status
 
@@ -92,7 +92,7 @@ npm run dist:portable
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.6.0.exe
+release/VoiceCoach Offline 0.7.0.exe
 ```
 
 Unpacked builds are written to:
@@ -144,7 +144,7 @@ Built-in transcription uses the Windows `System.Speech` recognizer on the local 
 
 ## Roadmap
 
-- `0.6.x`: Camera session fixes and built-in transcription hardening.
+- `0.7.x`: UI/UX simplification, accessibility polish, and release-hardening fixes.
 - `1.0.0`: stable offline speaking coach release.
 - Post-`1.0.0`: evaluate optional bundled open-source transcription models if Windows recognition is not enough.
 

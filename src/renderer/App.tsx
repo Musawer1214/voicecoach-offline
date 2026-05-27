@@ -2,7 +2,7 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Camera,
+  ChevronDown,
   Download,
   ExternalLink,
   FileText,
@@ -16,6 +16,7 @@ import {
   Save,
   Settings,
   Sparkles,
+  SlidersHorizontal,
   Square,
   Target,
   Trash2,
@@ -915,7 +916,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.6.0"}</span>
+            <span>v{meta?.version ?? "0.7.0"}</span>
           </div>
         </div>
 
@@ -959,6 +960,7 @@ export function App() {
             onStartPractice={preparePractice}
             onStartCalibration={startCalibration}
             onOpenSession={openSession}
+            onOpenProgress={() => setScreen("progress")}
             recordingMode={recordingMode}
             autoTranscriptionEnabled={autoTranscriptionEnabled}
           />
@@ -1104,11 +1106,40 @@ function NavButton({
   );
 }
 
+function DisclosureSection({
+  children,
+  defaultOpen = false,
+  summary,
+  title
+}: {
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+  summary?: string;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <details className="disclosure-section" open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
+      <summary>
+        <span>
+          <SlidersHorizontal size={16} />
+          {title}
+        </span>
+        {summary && <em>{summary}</em>}
+        <ChevronDown size={16} className="disclosure-chevron" />
+      </summary>
+      <div className="disclosure-body">{children}</div>
+    </details>
+  );
+}
+
 function HomeScreen({
   autoTranscriptionEnabled,
   calibration,
   sessions,
   recordingMode,
+  onOpenProgress,
   onStartPractice,
   onStartCalibration,
   onOpenSession
@@ -1117,54 +1148,78 @@ function HomeScreen({
   calibration: CalibrationProfile | null;
   recordingMode: RecordingMode;
   sessions: SavedSession[];
+  onOpenProgress: () => void;
   onStartPractice: () => void;
   onStartCalibration: () => void;
   onOpenSession: (session: SavedSession) => void;
 }) {
+  const latestSession = sessions[0] ?? null;
+  const coachAverage = formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore));
+  const videoSessionCount = sessions.filter((session) => session.session.recordingKind === "video").length;
+  const transcriptCount = sessions.filter((session) => session.transcript?.source === "windows_builtin").length;
+
   return (
     <section className="screen">
       <header className="screen-header">
         <div>
-          <h1>Practice speaking at a stronger, steadier volume</h1>
-          <p>Offline audio, camera practice, built-in transcription, and local review.</p>
+          <h1>Start a clear speaking practice</h1>
+          <p>Calibrate once, record a take, then review volume, transcript, and coach feedback.</p>
         </div>
         <div className="header-actions">
-          <button className="secondary-button" onClick={onStartCalibration}>
-            <Wand2 size={18} /> Calibrate
-          </button>
           <button className="primary-button" onClick={onStartPractice}>
             <Mic size={18} /> Start Practice
+          </button>
+          <button
+            className="secondary-button"
+            onClick={() => latestSession && onOpenSession(latestSession)}
+            disabled={!latestSession}
+          >
+            <Play size={18} /> Review Last
           </button>
         </div>
       </header>
 
-      <div className="dashboard-grid">
-        <Metric label="Calibration" value={calibration ? "Ready" : "Needed"} />
-        <Metric label="Target Minimum" value={calibration ? `${calibration.targetMinDb} dB` : "--"} />
-        <Metric label="Recording" value={recordingMode === "video" ? "Camera + mic" : "Audio only"} />
-        <Metric label="Transcription" value={autoTranscriptionEnabled ? "Built in" : "Off"} />
-      </div>
+      <section className="quick-start-panel">
+        <button className="quick-step primary-step" onClick={onStartPractice}>
+          <span>Practice</span>
+          <strong>{calibration ? "Start recording" : "Start and calibrate if needed"}</strong>
+        </button>
+        <button className="quick-step" onClick={onStartCalibration}>
+          <span>Calibration</span>
+          <strong>{calibration ? "Ready" : "Needed"}</strong>
+        </button>
+        <button className="quick-step" onClick={onOpenProgress}>
+          <span>Progress</span>
+          <strong>{coachAverage === "--" ? "No score yet" : `${coachAverage} average`}</strong>
+        </button>
+      </section>
 
-      <div className="dashboard-grid">
-        <Metric
-          label="Coach Average"
-          value={formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore))}
-        />
-        <Metric label="Recent Sessions" value={String(sessions.length)} />
-        <Metric
-          label="Video Sessions"
-          value={String(sessions.filter((session) => session.session.recordingKind === "video").length)}
-        />
-        <Metric
-          label="Auto Transcripts"
-          value={String(sessions.filter((session) => session.transcript?.source === "windows_builtin").length)}
-        />
-      </div>
+      <section className="summary-strip" aria-label="Current setup">
+        <div>
+          <span>Target</span>
+          <strong>{calibration ? `${calibration.targetMinDb} to ${calibration.targetMaxDb} dB` : "Not calibrated"}</strong>
+        </div>
+        <div>
+          <span>Recording</span>
+          <strong>{recordingMode === "video" ? "Camera + mic" : "Audio only"}</strong>
+        </div>
+        <div>
+          <span>Transcription</span>
+          <strong>{autoTranscriptionEnabled ? "Built in" : "Off"}</strong>
+        </div>
+        <div>
+          <span>Sessions</span>
+          <strong>{sessions.length} total</strong>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="panel-title">
           <FolderOpen size={18} />
           <h2>Recent Sessions</h2>
+          <span className="panel-meta">
+            {videoSessionCount} video - {transcriptCount} auto transcripts
+          </span>
         </div>
         <SessionList sessions={sessions} onOpenSession={onOpenSession} />
       </section>
@@ -1509,7 +1564,7 @@ function CalibrationScreen({
       <header className="screen-header compact">
         <div>
           <h1>Microphone Calibration</h1>
-          <p>Stay quiet for the first few seconds, then speak normally until the timer completes.</p>
+          <p>Set your normal speaking level so live warnings are useful.</p>
         </div>
       </header>
 
@@ -1520,10 +1575,6 @@ function CalibrationScreen({
           onSelectDevice={onSelectDevice}
           onRefreshDevices={onRefreshDevices}
         />
-        <AudioProcessingControl
-          mode={microphoneProcessingMode}
-          onChange={onSelectMicrophoneProcessingMode}
-        />
         <VolumeMeter level={level} calibration={profile} />
         <div className="progress-track" aria-label="Calibration progress">
           <div style={{ width: `${progressPercent}%` }} />
@@ -1532,16 +1583,29 @@ function CalibrationScreen({
           <button className="primary-button" onClick={onStartCalibration} disabled={active}>
             <Timer size={18} /> {active ? `Calibrating ${progressPercent}%` : "Start 23s Calibration"}
           </button>
+          <span className="helper-text">Stay quiet first, then speak normally until it finishes.</span>
         </div>
+
+        <DisclosureSection
+          title="Advanced microphone setup"
+          summary={microphoneProcessingMode === "enhanced" ? "Enhanced processing" : "Natural input"}
+        >
+          <AudioProcessingControl
+            mode={microphoneProcessingMode}
+            onChange={onSelectMicrophoneProcessingMode}
+          />
+        </DisclosureSection>
       </section>
 
       {profile && (
-        <section className="panel stats-panel">
-          <Metric label="Noise Floor" value={`${profile.noiseFloorDb} dB`} />
-          <Metric label="Speech Average" value={`${profile.speechAverageDb} dB`} />
-          <Metric label="Target Range" value={`${profile.targetMinDb} to ${profile.targetMaxDb} dB`} />
-          <Metric label="Low Threshold" value={`${profile.lowThresholdDb} dB`} />
-        </section>
+        <DisclosureSection title="Calibration details" summary={`Target ${profile.targetMinDb} to ${profile.targetMaxDb} dB`}>
+          <div className="dashboard-grid">
+            <Metric label="Noise Floor" value={`${profile.noiseFloorDb} dB`} />
+            <Metric label="Speech Average" value={`${profile.speechAverageDb} dB`} />
+            <Metric label="Target Range" value={`${profile.targetMinDb} to ${profile.targetMaxDb} dB`} />
+            <Metric label="Low Threshold" value={`${profile.lowThresholdDb} dB`} />
+          </div>
+        </DisclosureSection>
       )}
     </section>
   );
@@ -1636,133 +1700,6 @@ function PracticeScreen({
 
       <GoalSelector activeGoalId={goalId} disabled={isRecording} onChange={onGoalChange} />
 
-      <section className="panel capture-settings-panel">
-        <div className="panel-title">
-          <Camera size={18} />
-          <h2>Camera and Transcription</h2>
-        </div>
-        <div className="capture-grid">
-          <div className="processing-control">
-            <div>
-              <strong>Recording mode</strong>
-              <span>Record audio only, or save camera and microphone together in the local session file.</span>
-            </div>
-            <div className="segmented-control">
-              <button
-                className={recordingMode === "video" ? "active" : ""}
-                disabled={isRecording}
-                onClick={() => onRecordingModeChange("video")}
-              >
-                Camera
-              </button>
-              <button
-                className={recordingMode === "audio" ? "active" : ""}
-                disabled={isRecording}
-                onClick={() => onRecordingModeChange("audio")}
-              >
-                Audio
-              </button>
-            </div>
-          </div>
-          <div className="processing-control">
-            <div>
-              <strong>Built-in transcription</strong>
-              <span>Uses the Windows local speech recognizer when available and saves final text after recording.</span>
-            </div>
-            <label className="toggle-control">
-              <input
-                type="checkbox"
-                checked={autoTranscriptionEnabled}
-                disabled={isRecording}
-                onChange={(event) => onAutoTranscriptionEnabledChange(event.target.checked)}
-              />
-              <span>{autoTranscriptionEnabled ? "On" : "Off"}</span>
-            </label>
-          </div>
-        </div>
-
-        {recordingMode === "video" && (
-          <>
-            <CameraPicker
-              cameras={cameras}
-              disabled={isRecording}
-              onRefreshDevices={onRefreshDevices}
-              onSelectCamera={onSelectCamera}
-              selectedCameraId={selectedCameraId}
-            />
-            <div className="camera-options">
-              <label>
-                Resolution
-                <select
-                  value={cameraResolution}
-                  disabled={isRecording}
-                  onChange={(event) => onCameraResolutionChange(event.target.value as CameraResolution)}
-                >
-                  {CAMERA_RESOLUTIONS.map((resolution) => (
-                    <option key={resolution} value={resolution}>
-                      {resolution}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Frame rate
-                <select
-                  value={cameraFrameRate}
-                  disabled={isRecording}
-                  onChange={(event) => onCameraFrameRateChange(Number(event.target.value))}
-                >
-                  {CAMERA_FRAME_RATES.map((rate) => (
-                    <option key={rate} value={rate}>
-                      {rate} fps
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="toggle-control inline">
-                <input
-                  type="checkbox"
-                  checked={cameraMirror}
-                  disabled={isRecording}
-                  onChange={(event) => onCameraMirrorChange(event.target.checked)}
-                />
-                <span>Mirror preview</span>
-              </label>
-            </div>
-          </>
-        )}
-      </section>
-
-      <section className="panel session-setup-panel">
-        <label>
-          Session title
-          <input
-            value={title}
-            onChange={(event) => onChangeTitle(event.target.value)}
-            placeholder="Practice session"
-            disabled={isRecording}
-          />
-        </label>
-        <label>
-          Practice prompt
-          <textarea
-            value={prompt}
-            onChange={(event) => onChangePrompt(event.target.value)}
-            placeholder="Example: Explain my project in one minute."
-            disabled={isRecording}
-          />
-        </label>
-        <label>
-          Notes
-          <textarea
-            value={notes}
-            onChange={(event) => onChangeNotes(event.target.value)}
-            placeholder="What should I focus on during this take?"
-            disabled={isRecording}
-          />
-        </label>
-      </section>
-
       <section className="practice-surface">
         {recordingMode === "video" && (
           <div className="camera-preview-shell">
@@ -1797,6 +1734,141 @@ function PracticeScreen({
           )}
         </div>
       </section>
+
+      <DisclosureSection
+        title="Capture options"
+        summary={`${recordingMode === "video" ? "Camera + mic" : "Audio only"} - transcription ${
+          autoTranscriptionEnabled ? "on" : "off"
+        }`}
+      >
+        <section className="capture-settings-panel">
+          <div className="capture-grid">
+            <div className="processing-control">
+              <div>
+                <strong>Recording mode</strong>
+                <span>Record audio only, or save camera and microphone together.</span>
+              </div>
+              <div className="segmented-control">
+                <button
+                  className={recordingMode === "video" ? "active" : ""}
+                  disabled={isRecording}
+                  onClick={() => onRecordingModeChange("video")}
+                >
+                  Camera
+                </button>
+                <button
+                  className={recordingMode === "audio" ? "active" : ""}
+                  disabled={isRecording}
+                  onClick={() => onRecordingModeChange("audio")}
+                >
+                  Audio
+                </button>
+              </div>
+            </div>
+            <div className="processing-control">
+              <div>
+                <strong>Built-in transcription</strong>
+                <span>Uses the Windows local speech recognizer when available.</span>
+              </div>
+              <label className="toggle-control">
+                <input
+                  type="checkbox"
+                  checked={autoTranscriptionEnabled}
+                  disabled={isRecording}
+                  onChange={(event) => onAutoTranscriptionEnabledChange(event.target.checked)}
+                />
+                <span>{autoTranscriptionEnabled ? "On" : "Off"}</span>
+              </label>
+            </div>
+          </div>
+
+          {recordingMode === "video" && (
+            <>
+              <CameraPicker
+                cameras={cameras}
+                disabled={isRecording}
+                onRefreshDevices={onRefreshDevices}
+                onSelectCamera={onSelectCamera}
+                selectedCameraId={selectedCameraId}
+              />
+              <div className="camera-options">
+                <label>
+                  Resolution
+                  <select
+                    value={cameraResolution}
+                    disabled={isRecording}
+                    onChange={(event) => onCameraResolutionChange(event.target.value as CameraResolution)}
+                  >
+                    {CAMERA_RESOLUTIONS.map((resolution) => (
+                      <option key={resolution} value={resolution}>
+                        {resolution}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Frame rate
+                  <select
+                    value={cameraFrameRate}
+                    disabled={isRecording}
+                    onChange={(event) => onCameraFrameRateChange(Number(event.target.value))}
+                  >
+                    {CAMERA_FRAME_RATES.map((rate) => (
+                      <option key={rate} value={rate}>
+                        {rate} fps
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="toggle-control inline">
+                  <input
+                    type="checkbox"
+                    checked={cameraMirror}
+                    disabled={isRecording}
+                    onChange={(event) => onCameraMirrorChange(event.target.checked)}
+                  />
+                  <span>Mirror preview</span>
+                </label>
+              </div>
+            </>
+          )}
+        </section>
+      </DisclosureSection>
+
+      <DisclosureSection
+        title="Session details"
+        summary={title.trim() || prompt.trim() ? "Title or prompt added" : "Optional"}
+      >
+        <section className="session-setup-panel">
+          <label>
+            Session title
+            <input
+              value={title}
+              onChange={(event) => onChangeTitle(event.target.value)}
+              placeholder="Practice session"
+              disabled={isRecording}
+            />
+          </label>
+          <label>
+            Practice prompt
+            <textarea
+              value={prompt}
+              onChange={(event) => onChangePrompt(event.target.value)}
+              placeholder="Example: Explain my project in one minute."
+              disabled={isRecording}
+            />
+          </label>
+          <label>
+            Notes
+            <textarea
+              value={notes}
+              onChange={(event) => onChangeNotes(event.target.value)}
+              placeholder="What should I focus on during this take?"
+              disabled={isRecording}
+            />
+          </label>
+        </section>
+      </DisclosureSection>
     </section>
   );
 }
@@ -1958,74 +2030,74 @@ function ReviewScreen({
               <Metric label="Transcript" value={formatTranscriptSource(session.transcript?.source)} />
             </div>
             {session.coachReport && <CoachReportPanel report={session.coachReport} onSeek={seekAudio} />}
-            {session.report && <AudioReportPanel report={session.report} onSeek={seekAudio} />}
-            <section className="metadata-editor">
-              <div className="panel-title">
-                <FileText size={18} />
-                <h2>Session Details</h2>
-              </div>
-              <label>
-                Title
-                <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} />
-              </label>
-              <label>
-                Practice prompt
-                <textarea value={draftPrompt} onChange={(event) => setDraftPrompt(event.target.value)} />
-              </label>
-              <label>
-                Notes
-                <textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} />
-              </label>
-              <div className="row-actions">
-                <button className="secondary-button compact-button" onClick={saveMetadata}>
-                  <Save size={16} /> Save Details
-                </button>
-              </div>
-            </section>
-            <section className="transcript-panel">
-              <div className="panel-title">
-                <FileText size={18} />
-                <h2>Transcript</h2>
-              </div>
-              <div className="dictation-helper">
-                <div>
-                  <strong>Windows speech input</strong>
-                  <span>
-                    Focus the transcript box, then use Win+H voice typing or Windows Voice Access. Save after text appears.
-                  </span>
+            {session.report && (
+              <DisclosureSection title="Audio report details" summary="Volume, silence, and consistency">
+                <AudioReportPanel report={session.report} onSeek={seekAudio} />
+              </DisclosureSection>
+            )}
+            <DisclosureSection
+              title="Session details"
+              summary={draftTitle.trim() || session.session.metadata?.title || "Optional notes"}
+            >
+              <section className="metadata-editor">
+                <label>
+                  Title
+                  <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} />
+                </label>
+                <label>
+                  Practice prompt
+                  <textarea value={draftPrompt} onChange={(event) => setDraftPrompt(event.target.value)} />
+                </label>
+                <label>
+                  Notes
+                  <textarea value={draftNotes} onChange={(event) => setDraftNotes(event.target.value)} />
+                </label>
+                <div className="row-actions">
+                  <button className="secondary-button compact-button" onClick={saveMetadata}>
+                    <Save size={16} /> Save Details
+                  </button>
                 </div>
-                <button className="secondary-button compact-button" onClick={startWindowsDictation}>
-                  <Keyboard size={16} /> Use Windows Speech
-                </button>
-              </div>
-              <textarea
-                ref={transcriptRef}
-                value={draftTranscript}
-                onChange={(event) => setDraftTranscript(event.target.value)}
-                placeholder="Paste or type the transcript here. VoiceCoach will run local grammar and clarity checks."
-              />
-              <div className="row-actions">
-                <span className="source-pill">Source: {formatTranscriptSource(draftTranscriptSource)}</span>
-                <button className="secondary-button compact-button" onClick={saveTranscript}>
-                  <Save size={16} /> Save and Analyze
-                </button>
-              </div>
-              {session.textSuggestions && <TextSuggestionsPanel document={session.textSuggestions} />}
-            </section>
-            <div className="path-box">{session.folderPath}</div>
+              </section>
+            </DisclosureSection>
+            <DisclosureSection
+              title="Transcript and clarity checks"
+              summary={session.transcript ? formatTranscriptSource(session.transcript.source) : "Add transcript"}
+            >
+              <section className="transcript-panel">
+                <div className="dictation-helper">
+                  <div>
+                    <strong>Windows speech input</strong>
+                    <span>Focus the transcript box, then use Win+H voice typing or Windows Voice Access.</span>
+                  </div>
+                  <button className="secondary-button compact-button" onClick={startWindowsDictation}>
+                    <Keyboard size={16} /> Use Windows Speech
+                  </button>
+                </div>
+                <textarea
+                  ref={transcriptRef}
+                  value={draftTranscript}
+                  onChange={(event) => setDraftTranscript(event.target.value)}
+                  placeholder="Paste or type the transcript here. VoiceCoach will run local grammar and clarity checks."
+                />
+                <div className="row-actions">
+                  <span className="source-pill">Source: {formatTranscriptSource(draftTranscriptSource)}</span>
+                  <button className="secondary-button compact-button" onClick={saveTranscript}>
+                    <Save size={16} /> Save and Analyze
+                  </button>
+                </div>
+                {session.textSuggestions && <TextSuggestionsPanel document={session.textSuggestions} />}
+              </section>
+            </DisclosureSection>
           </section>
         </>
       ) : (
         <section className="panel empty-state">No session selected yet.</section>
       )}
 
-      <section className="panel">
-        <div className="panel-title">
-          <FolderOpen size={18} />
-          <h2>Saved Sessions</h2>
-        </div>
+      <DisclosureSection title="Files and saved sessions" summary={`${sessions.length} local sessions`}>
+        {session && <div className="path-box">{session.folderPath}</div>}
         <SessionList sessions={sessions} onOpenSession={onOpenSession} />
-      </section>
+      </DisclosureSection>
     </section>
   );
 }
@@ -2292,11 +2364,11 @@ function SettingsScreen({
       <header className="screen-header compact">
         <div>
           <h1>Settings</h1>
-          <p>Local storage and microphone configuration for this prototype.</p>
+          <p>Keep everyday controls visible and advanced device options tucked away.</p>
         </div>
       </header>
 
-      <section className="panel">
+      <DisclosureSection title="Microphone" summary={settings?.selectedDeviceLabel ?? "Default device"} defaultOpen>
         <DevicePicker
           devices={devices}
           selectedDeviceId={selectedDeviceId}
@@ -2304,6 +2376,12 @@ function SettingsScreen({
           onRefreshDevices={onRefreshDevices}
         />
         <AudioProcessingControl mode={microphoneProcessingMode} onChange={onSelectMicrophoneProcessingMode} />
+      </DisclosureSection>
+
+      <DisclosureSection
+        title="Camera and transcription"
+        summary={`${cameraResolution}, transcription ${autoTranscriptionEnabled ? "on" : "off"}`}
+      >
         <CameraPicker
           cameras={cameras}
           selectedCameraId={selectedCameraId}
@@ -2351,6 +2429,9 @@ function SettingsScreen({
             <span>Start built-in transcription with recording</span>
           </label>
         </div>
+      </DisclosureSection>
+
+      <DisclosureSection title="Playback and app info" summary={`Boost ${reviewPlaybackGain.toFixed(2)}x`}>
         <label className="settings-slider">
           <span>Default review playback boost</span>
           <input
@@ -2364,7 +2445,7 @@ function SettingsScreen({
           <strong>{reviewPlaybackGain.toFixed(2)}x</strong>
         </label>
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.3.2"} />
+          <Metric label="Version" value={meta?.version ?? "0.7.0"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
@@ -2373,7 +2454,7 @@ function SettingsScreen({
           <Metric label="Auto Transcription" value={autoTranscriptionEnabled ? "On" : "Off"} />
           <Metric label="Calibration" value={calibration ? calibration.createdAt.slice(0, 10) : "Not saved"} />
         </div>
-      </section>
+      </DisclosureSection>
     </section>
   );
 }

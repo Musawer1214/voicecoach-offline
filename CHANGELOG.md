@@ -10,7 +10,28 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.4.x`: Coach Mode and product polish
 - `0.5.x`: Progress Coach and assisted transcript entry
 - `0.6.x`: camera sessions and built-in transcription
+- `0.7.x`: simplified UI and release-readiness polish
 - `1.0.0`: stable public release
+
+## 0.7.0 - 2026-05-28
+
+Added:
+
+- reusable disclosure sections for advanced and optional controls
+- quick-start home flow for Practice, Calibration, and Progress
+- compact setup summary for calibration, recording mode, transcription, and local sessions
+
+Changed:
+
+- practice screen now prioritizes the live camera/meter/recording surface before secondary setup controls
+- camera, transcription, prompts, and notes are tucked behind optional sections
+- review screen keeps playback, timeline, summary metrics, and coach feedback visible while moving deeper report, transcript, file, and metadata tools into collapsible sections
+- settings screen is grouped by microphone, camera/transcription, and playback/app info
+- visual styling is calmer, with lighter borders, fewer heavy card shadows, and tighter goal cards
+
+Tests:
+
+- existing automated test suite and production build pass for this release
 
 ## 0.6.0 - 2026-05-26
 

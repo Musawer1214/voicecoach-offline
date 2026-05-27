@@ -29,9 +29,9 @@ Avoid wording like:
 - "Bad grammar"
 - "Failed"
 
-## Current Status in `0.6.0`
+## Current Status in `0.7.0`
 
-`0.6.0` keeps grammar and clarity feedback offline, combines transcript signals with audio scoring inside Coach Mode, and adds built-in Windows transcription when the local recognizer is available. Manual transcript entry and Windows speech-assisted entry remain available as fallbacks.
+`0.7.0` keeps grammar and clarity feedback offline, combines transcript signals with audio scoring inside Coach Mode, and keeps built-in Windows transcription when the local recognizer is available. Manual transcript entry and Windows speech-assisted entry remain available as fallbacks, now tucked behind the Review screen's transcript disclosure section.
 
 Added:
 
