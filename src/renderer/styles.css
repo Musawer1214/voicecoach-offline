@@ -293,6 +293,54 @@ button:disabled {
   gap: 12px;
 }
 
+.guided-hero,
+.guided-practice-banner,
+.guided-comparison-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.45fr);
+  gap: 16px;
+  align-items: center;
+  border: 1px solid #d5f3ee;
+  border-radius: 8px;
+  padding: 16px;
+  background: #f0fdfa;
+}
+
+.guided-hero h2,
+.guided-practice-banner strong,
+.guided-comparison-panel strong {
+  color: #111827;
+}
+
+.guided-hero-meta,
+.guided-practice-banner > div:last-child {
+  display: grid;
+  gap: 4px;
+  color: #0f766e;
+}
+
+.guided-hero-meta span,
+.guided-practice-banner > div:last-child span {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.guided-hero-meta strong,
+.guided-practice-banner > div:last-child strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.comparison-scores {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid #ccfbf1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
 .quick-step {
   display: grid;
   gap: 4px;
@@ -577,6 +625,75 @@ button:disabled {
   font-size: 14px;
 }
 
+.guided-track-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.guided-track-card {
+  display: grid;
+  gap: 7px;
+  min-height: 128px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  padding: 12px;
+  color: #1f2937;
+  background: #ffffff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.guided-track-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guided-track-card strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.guided-track-card em {
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.guided-track-card.active {
+  border-color: #14b8a6;
+  background: #f0fdfa;
+  box-shadow: inset 0 0 0 1px #14b8a6;
+}
+
+.guided-plan-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.45fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #edf1f7;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.guided-plan-strip div {
+  display: grid;
+  gap: 4px;
+}
+
+.guided-plan-strip span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guided-plan-strip strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .coach-overview,
 .coach-columns {
   display: grid;
@@ -629,6 +746,67 @@ button:disabled {
 .next-action-panel {
   border-left: 3px solid #14b8a6;
   padding: 4px 0 4px 16px;
+}
+
+.preflight-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #e4eaf2;
+  border-radius: 8px;
+  padding: 12px;
+  color: #475569;
+  background: #f8fafc;
+}
+
+.preflight-panel > div:first-child,
+.preflight-checks,
+.preflight-checks span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preflight-panel.pass {
+  border-color: #99f6e4;
+  color: #0f766e;
+  background: #f0fdfa;
+}
+
+.preflight-panel.warning {
+  border-color: #fed7aa;
+  color: #9a3412;
+  background: #fff7ed;
+}
+
+.preflight-panel.fail {
+  border-color: #fecaca;
+  color: #991b1b;
+  background: #fef2f2;
+}
+
+.preflight-checks {
+  flex-wrap: wrap;
+}
+
+.preflight-checks span {
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+  background: #ffffff;
+}
+
+.preflight-checks .pass {
+  color: #0f766e;
+}
+
+.preflight-checks .warning {
+  color: #b45309;
+}
+
+.preflight-checks .fail {
+  color: #b91c1c;
 }
 
 .readiness-score {
@@ -1559,9 +1737,14 @@ button:disabled {
   .settings-grid,
   .quick-start-panel,
   .summary-strip,
+  .guided-hero,
+  .guided-practice-banner,
+  .guided-comparison-panel,
+  .guided-plan-strip,
   .coach-overview,
   .coach-columns,
   .goal-progress-grid,
+  .guided-track-grid,
   .capture-grid,
   .camera-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));

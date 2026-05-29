@@ -1,6 +1,6 @@
 # Windows Speech Notes
 
-VoiceCoach Offline `0.8.0` supports built-in Windows transcription and still keeps Windows speech input as a fallback transcript-entry workflow.
+VoiceCoach Offline `0.9.0` supports built-in Windows transcription and still keeps Windows speech input as a fallback transcript-entry workflow.
 
 ## Built-in Provider
 

@@ -12,7 +12,30 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.6.x`: camera sessions and built-in transcription
 - `0.7.x`: simplified UI and release-readiness polish
 - `0.8.x`: first-real-user trust, backup, installer, and UI-density hardening
+- `0.9.x`: guided practice loop, baseline/retry comparison, and recording preflight hardening
 - `1.0.0`: stable public release
+
+## 0.9.0 - 2026-05-29
+
+Added:
+
+- guided practice tracks for projection, clarity, pacing, interview answers, and confident delivery
+- baseline/retry session planning that prefills title, prompt, notes, and coaching focus
+- guided comparison panel in Review with previous score, current score, delta, and next retry message
+- recording preflight checks for microphone, recorder, calibration, camera, transcription, storage, and local-data state
+- guided metadata fields on session JSON for future migration and program tracking
+
+Changed:
+
+- Home now centers the next guided practice action instead of only listing app capabilities
+- Coach Mode now presents guided tracks, prompt context, and success signals
+- Practice shows the active guided plan and compact preflight status before recording
+- Review includes a direct Retry action for guided sessions
+
+Tests:
+
+- added guided-practice unit coverage for baseline/retry planning, recommendation, and comparison
+- automated test suite and production build pass for this release
 
 ## 0.8.0 - 2026-05-29
 

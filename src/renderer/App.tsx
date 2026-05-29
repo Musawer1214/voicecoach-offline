@@ -68,12 +68,28 @@ import {
 } from "./audio/level";
 import { buildAudioReport } from "./audio/report";
 import { PRACTICE_GOALS, buildCoachReport, resolvePracticeGoal } from "./coach/coach";
+import {
+  GUIDED_TRACKS,
+  GuidedSessionPlan,
+  buildGuidedComparison,
+  buildGuidedSessionPlan,
+  buildRetryGuidedSessionPlan,
+  chooseRecommendedTrack,
+  resolveGuidedTrack
+} from "./guided/guided";
 import { buildTextSuggestions } from "./text/suggestions";
 
 type Screen = "home" | "coach" | "progress" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
 type RecordingMode = "audio" | "video";
 type AutoTranscriptionState = "idle" | "starting" | "listening" | "unavailable" | "error";
+type ReliabilityCheckStatus = "pass" | "warning" | "fail";
+type RecordingPreflightCheck = {
+  id: string;
+  label: string;
+  status: ReliabilityCheckStatus;
+  detail: string;
+};
 
 const CALIBRATION_TOTAL_MS = 23_000;
 const WARNING_LOW_MS = 1_500;
@@ -106,6 +122,8 @@ export function App() {
   const [practicePrompt, setPracticePrompt] = useState("");
   const [practiceNotes, setPracticeNotes] = useState("");
   const [practiceGoalId, setPracticeGoalId] = useState<PracticeGoalId>("projection");
+  const [guidedPlan, setGuidedPlan] = useState<GuidedSessionPlan | null>(null);
+  const [preflightChecks, setPreflightChecks] = useState<RecordingPreflightCheck[]>([]);
   const [microphoneProcessingMode, setMicrophoneProcessingMode] = useState<MicrophoneProcessingMode>(
     DEFAULT_MICROPHONE_PROCESSING_MODE
   );
@@ -443,8 +461,40 @@ export function App() {
     setScreen("practice");
     setWarning("");
     setError("");
+    setPreflightChecks([]);
     practiceSamplesRef.current = [];
     await startMicrophone("practice", handlePracticeSample);
+  }
+
+  async function startGuidedPractice(trackId = chooseRecommendedTrack(sessions, practiceGoalId).id) {
+    const plan = buildGuidedSessionPlan(trackId, sessions);
+    setGuidedPlan(plan);
+    setPracticeGoalId(plan.track.id);
+    setPracticeTitle(plan.title);
+    setPracticePrompt(plan.prompt);
+    setPracticeNotes(plan.notes);
+    await preparePractice();
+  }
+
+  async function retryGuidedPractice(saved: SavedSession) {
+    const plan = buildRetryGuidedSessionPlan(saved, sessions);
+    setGuidedPlan(plan);
+    setPracticeGoalId(plan.track.id);
+    setPracticeTitle(plan.title);
+    setPracticePrompt(plan.prompt);
+    setPracticeNotes(plan.notes);
+    await preparePractice();
+  }
+
+  function selectPracticeGoal(goalId: PracticeGoalId) {
+    setPracticeGoalId(goalId);
+    if (guidedPlan) {
+      const plan = buildGuidedSessionPlan(goalId, sessions);
+      setGuidedPlan(plan);
+      setPracticeTitle(plan.title);
+      setPracticePrompt(plan.prompt);
+      setPracticeNotes(plan.notes);
+    }
   }
 
   async function startRecording() {
@@ -454,6 +504,23 @@ export function App() {
 
     if (!streamRef.current) {
       setError("Microphone stream is not available.");
+      return;
+    }
+
+    const preflight = await buildRecordingPreflightChecks({
+      autoTranscriptionEnabled,
+      calibration: calibrationRef.current,
+      recordingMode,
+      stream: streamRef.current,
+      trustSnapshot
+    });
+    setPreflightChecks(preflight);
+
+    const blockingCheck = preflight.find(
+      (check) => check.status === "fail" && (check.id === "microphone" || check.id === "recorder")
+    );
+    if (blockingCheck) {
+      setError(blockingCheck.detail);
       return;
     }
 
@@ -493,11 +560,7 @@ export function App() {
     recorder.start();
     isRecordingRef.current = true;
     setIsRecording(true);
-    setWarning(
-      activeRecordingCalibrationRef.current
-        ? ""
-        : "Recording without calibration - review metrics will be incomplete."
-    );
+    setWarning(preflight.find((check) => check.status !== "pass")?.detail ?? "");
   }
 
   async function stopRecording() {
@@ -529,7 +592,7 @@ export function App() {
       recordingWallStartedAtRef.current ? Math.round(performance.now() - recordingWallStartedAtRef.current) : 0
     );
     const events = analyzeSessionSamples(samples, calibrationForSession);
-    const metadata = buildSessionMetadata(practiceTitle, practicePrompt, practiceNotes, [], practiceGoalId);
+    const metadata = buildSessionMetadata(practiceTitle, practicePrompt, practiceNotes, [], practiceGoalId, guidedPlan);
     const session: VoiceCoachSession = {
       schemaVersion: 1,
       id: crypto.randomUUID(),
@@ -600,6 +663,8 @@ export function App() {
       setPracticeTitle("");
       setPracticePrompt("");
       setPracticeNotes("");
+      setGuidedPlan(null);
+      setPreflightChecks([]);
       stopMicrophone();
       setAutoTranscriptionState("idle");
     } catch (saveError) {
@@ -953,7 +1018,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.8.0"}</span>
+            <span>v{meta?.version ?? "0.9.0"}</span>
           </div>
         </div>
 
@@ -994,22 +1059,24 @@ export function App() {
           <HomeScreen
             calibration={calibration}
             sessions={sessions}
-            onStartPractice={preparePractice}
+            onStartPractice={() => startGuidedPractice()}
             onStartCalibration={startCalibration}
             onOpenSession={openSession}
             onOpenProgress={() => setScreen("progress")}
             recordingMode={recordingMode}
             autoTranscriptionEnabled={autoTranscriptionEnabled}
             trustSnapshot={trustSnapshot}
+            activeGoalId={practiceGoalId}
           />
         )}
 
         {screen === "coach" && (
           <CoachScreen
             goalId={practiceGoalId}
-            onGoalChange={setPracticeGoalId}
+            onGoalChange={selectPracticeGoal}
             onOpenSession={openSession}
-            onStartPractice={preparePractice}
+            onStartPractice={() => startGuidedPractice(practiceGoalId)}
+            onStartTrack={startGuidedPractice}
             sessions={sessions}
           />
         )}
@@ -1018,7 +1085,7 @@ export function App() {
           <ProgressScreen
             onExportProgress={exportProgressReport}
             onOpenSession={openSession}
-            onStartPractice={preparePractice}
+            onStartPractice={() => startGuidedPractice()}
             sessions={sessions}
           />
         )}
@@ -1048,6 +1115,8 @@ export function App() {
             cameraResolution={cameraResolution}
             cameras={cameras}
             calibration={calibration}
+            guidedPlan={guidedPlan}
+            preflightChecks={preflightChecks}
             level={level}
             isRecording={isRecording}
             liveTranscript={liveTranscript}
@@ -1062,7 +1131,7 @@ export function App() {
             onChangeTitle={setPracticeTitle}
             onChangePrompt={setPracticePrompt}
             onChangeNotes={setPracticeNotes}
-            onGoalChange={setPracticeGoalId}
+            onGoalChange={selectPracticeGoal}
             onRefreshDevices={() => refreshDevices(true)}
             onRecordingModeChange={updateRecordingMode}
             onSelectCamera={selectCamera}
@@ -1089,6 +1158,7 @@ export function App() {
             onDeleteSession={deleteReviewSession}
             onSaveTranscript={saveReviewTranscript}
             onRefreshCoachReport={refreshReviewCoachReport}
+            onRetryGuidedPractice={retryGuidedPractice}
             playbackGain={reviewPlaybackGain}
             onPlaybackGainChange={updateReviewPlaybackGain}
           />
@@ -1177,6 +1247,7 @@ function DisclosureSection({
 }
 
 function HomeScreen({
+  activeGoalId,
   autoTranscriptionEnabled,
   calibration,
   sessions,
@@ -1187,6 +1258,7 @@ function HomeScreen({
   onStartCalibration,
   onOpenSession
 }: {
+  activeGoalId: PracticeGoalId;
   autoTranscriptionEnabled: boolean;
   calibration: CalibrationProfile | null;
   recordingMode: RecordingMode;
@@ -1202,13 +1274,15 @@ function HomeScreen({
   const videoSessionCount = sessions.filter((session) => session.session.recordingKind === "video").length;
   const transcriptCount = sessions.filter((session) => session.transcript?.source === "windows_builtin").length;
   const trustSummary = getTrustSummary(trustSnapshot);
+  const recommendedTrack = chooseRecommendedTrack(sessions, activeGoalId);
+  const recommendedPlan = buildGuidedSessionPlan(recommendedTrack.id, sessions);
 
   return (
     <section className="screen">
       <header className="screen-header">
         <div>
           <h1>Start a clear speaking practice</h1>
-          <p>Calibrate once, record a take, then review volume, transcript, and coach feedback.</p>
+          <p>Follow one guided prompt, record a take, then retry with clearer evidence.</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" onClick={onStartPractice}>
@@ -1224,10 +1298,22 @@ function HomeScreen({
         </div>
       </header>
 
+      <section className="guided-hero">
+        <div>
+          <span className="focus-label">Next practice</span>
+          <h2>{recommendedTrack.label}</h2>
+          <p>{recommendedTrack.headline}</p>
+        </div>
+        <div className="guided-hero-meta">
+          <span>{recommendedPlan.attempt === "retry" ? "Retry mode" : "Baseline mode"}</span>
+          <strong>{recommendedTrack.successMetric}</strong>
+        </div>
+      </section>
+
       <section className="quick-start-panel">
         <button className="quick-step primary-step" onClick={onStartPractice}>
-          <span>Practice</span>
-          <strong>{calibration ? "Start recording" : "Start and calibrate if needed"}</strong>
+          <span>Guided Practice</span>
+          <strong>{calibration ? recommendedPlan.title : "Calibrate, then start"}</strong>
         </button>
         <button className="quick-step" onClick={onStartCalibration}>
           <span>Calibration</span>
@@ -1277,12 +1363,14 @@ function CoachScreen({
   onGoalChange,
   onOpenSession,
   onStartPractice,
+  onStartTrack,
   sessions
 }: {
   goalId: PracticeGoalId;
   onGoalChange: (goalId: PracticeGoalId) => void;
   onOpenSession: (session: SavedSession) => void;
   onStartPractice: () => void;
+  onStartTrack: (trackId: PracticeGoalId) => void;
   sessions: SavedSession[];
 }) {
   const coachSessions = useMemo(
@@ -1293,13 +1381,15 @@ function CoachScreen({
   const bestScore = Math.max(0, ...coachSessions.map((session) => session.coachReport?.readinessScore ?? 0));
   const averageScore = formatAverageScore(coachSessions.map((session) => session.coachReport?.readinessScore));
   const selectedGoal = resolvePracticeGoal(goalId);
+  const selectedTrack = resolveGuidedTrack(goalId);
+  const selectedPlan = buildGuidedSessionPlan(selectedTrack.id, sessions);
 
   return (
     <section className="screen">
       <header className="screen-header">
         <div>
           <h1>Coach Mode</h1>
-          <p>Pick a goal and let the last score choose the next drill.</p>
+          <p>Pick a track, record a baseline or retry, then compare improvement.</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" onClick={onStartPractice}>
@@ -1308,7 +1398,18 @@ function CoachScreen({
         </div>
       </header>
 
-      <GoalSelector activeGoalId={goalId} onChange={onGoalChange} />
+      <GuidedTrackPicker activeTrackId={goalId} onChange={onGoalChange} onStartTrack={onStartTrack} />
+
+      <section className="guided-plan-strip">
+        <div>
+          <span>{selectedPlan.attempt === "retry" ? "Retry prompt" : "Baseline prompt"}</span>
+          <strong>{selectedPlan.prompt}</strong>
+        </div>
+        <div>
+          <span>Success signal</span>
+          <strong>{selectedTrack.successMetric}</strong>
+        </div>
+      </section>
 
       <section className="coach-strip" aria-label="Coach summary">
         <div>
@@ -1562,6 +1663,33 @@ function GoalSelector({
   );
 }
 
+function GuidedTrackPicker({
+  activeTrackId,
+  onChange,
+  onStartTrack
+}: {
+  activeTrackId: PracticeGoalId;
+  onChange: (trackId: PracticeGoalId) => void;
+  onStartTrack: (trackId: PracticeGoalId) => void;
+}) {
+  return (
+    <section className="guided-track-grid" aria-label="Guided practice tracks">
+      {GUIDED_TRACKS.map((track) => (
+        <button
+          key={track.id}
+          className={`guided-track-card ${activeTrackId === track.id ? "active" : ""}`}
+          onClick={() => onChange(track.id)}
+          onDoubleClick={() => onStartTrack(track.id)}
+        >
+          <span>{track.shortLabel}</span>
+          <strong>{track.headline}</strong>
+          <em>{track.focus}</em>
+        </button>
+      ))}
+    </section>
+  );
+}
+
 function ScoreBars({ report }: { report: CoachReport }) {
   const rows = [
     ["Projection", report.scores.projection],
@@ -1678,6 +1806,7 @@ function PracticeScreen({
   cameras,
   calibration,
   goalId,
+  guidedPlan,
   isRecording,
   level,
   liveTranscript,
@@ -1697,6 +1826,7 @@ function PracticeScreen({
   onStartRecording,
   onStopRecording,
   partialTranscript,
+  preflightChecks,
   previewVideoRef,
   prompt,
   recordingMode,
@@ -1711,6 +1841,7 @@ function PracticeScreen({
   cameras: MediaDeviceInfo[];
   calibration: CalibrationProfile | null;
   goalId: PracticeGoalId;
+  guidedPlan: GuidedSessionPlan | null;
   isRecording: boolean;
   level: typeof initialLevel;
   liveTranscript: string;
@@ -1730,6 +1861,7 @@ function PracticeScreen({
   onStartRecording: () => void;
   onStopRecording: () => void;
   partialTranscript: string;
+  preflightChecks: RecordingPreflightCheck[];
   previewVideoRef: React.RefObject<HTMLVideoElement | null>;
   prompt: string;
   recordingMode: RecordingMode;
@@ -1758,6 +1890,22 @@ function PracticeScreen({
 
       <GoalSelector activeGoalId={goalId} disabled={isRecording} onChange={onGoalChange} />
 
+      {guidedPlan && (
+        <section className="guided-practice-banner">
+          <div>
+            <span className="focus-label">
+              {guidedPlan.attempt === "retry" ? "Retry practice" : "Baseline practice"}
+            </span>
+            <strong>{guidedPlan.track.label}</strong>
+            <p>{guidedPlan.track.focus}</p>
+          </div>
+          <div>
+            <span>Prompt</span>
+            <strong>{guidedPlan.prompt}</strong>
+          </div>
+        </section>
+      )}
+
       <section className="practice-surface">
         {recordingMode === "video" && (
           <div className="camera-preview-shell">
@@ -1780,6 +1928,7 @@ function PracticeScreen({
           </div>
           <p>{transcriptPreview}</p>
         </div>
+        <PreflightPanel checks={preflightChecks} />
         <div className="record-actions">
           {!isRecording ? (
             <button className="primary-button large-button" onClick={onStartRecording}>
@@ -1931,6 +2080,35 @@ function PracticeScreen({
   );
 }
 
+function PreflightPanel({ checks }: { checks: RecordingPreflightCheck[] }) {
+  if (checks.length === 0) {
+    return (
+      <div className="preflight-panel idle">
+        <ShieldCheck size={16} />
+        <span>Preflight checks run when recording starts.</span>
+      </div>
+    );
+  }
+
+  const summary = getReliabilitySummary(checks);
+  return (
+    <div className={`preflight-panel ${summary.tone}`}>
+      <div>
+        <ShieldCheck size={16} />
+        <strong>{summary.label}</strong>
+      </div>
+      <div className="preflight-checks">
+        {checks.map((check) => (
+          <span className={check.status} key={check.id} title={check.detail}>
+            {check.status === "pass" ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            {check.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 type ReviewMediaPlayerHandle = {
   seekAndPlay: (ms: number) => void;
 };
@@ -1944,6 +2122,7 @@ function ReviewScreen({
   onReanalyzeSession,
   onRefreshCoachReport,
   onRevealFolder,
+  onRetryGuidedPractice,
   onSaveTranscript,
   onUpdateMetadata,
   playbackGain,
@@ -1958,6 +2137,7 @@ function ReviewScreen({
   onReanalyzeSession: () => void;
   onRefreshCoachReport: () => void;
   onRevealFolder: () => void;
+  onRetryGuidedPractice: (session: SavedSession) => void;
   onSaveTranscript: (text: string, source: TranscriptDocument["source"]) => void;
   onUpdateMetadata: (metadata: SessionMetadata) => void;
   playbackGain: number;
@@ -1977,6 +2157,7 @@ function ReviewScreen({
     session?.session.calibrationId && calibration && session.session.calibrationId !== calibration.id
   );
   const hasMissingReport = Boolean(session && !session.report);
+  const guidedComparison = session ? buildGuidedComparison(session, sessions) : null;
 
   useEffect(() => {
     setDraftTitle(session?.session.metadata?.title ?? "");
@@ -1993,7 +2174,9 @@ function ReviewScreen({
         draftPrompt,
         draftNotes,
         session?.session.metadata?.tags ?? [],
-        session?.session.metadata?.goalId
+        session?.session.metadata?.goalId,
+        null,
+        session?.session.metadata
       )
     );
   }
@@ -2033,6 +2216,13 @@ function ReviewScreen({
               </button>
               <button className="secondary-button compact-button" onClick={onRefreshCoachReport}>
                 <Sparkles size={16} /> Update Coach
+              </button>
+              <button
+                className="primary-button compact-button"
+                onClick={() => onRetryGuidedPractice(session)}
+                disabled={!session.session.metadata?.guidedTrackId && !session.session.metadata?.goalId}
+              >
+                <RotateCcw size={16} /> Retry
               </button>
               <button className="secondary-button compact-button" onClick={onRevealFolder}>
                 <ExternalLink size={16} /> Folder
@@ -2087,6 +2277,7 @@ function ReviewScreen({
               <Metric label="Low Events" value={String(session.session.summary.lowVolumeEventCount)} />
               <Metric label="Transcript" value={formatTranscriptSource(session.transcript?.source)} />
             </div>
+            {guidedComparison && <GuidedComparisonPanel comparison={guidedComparison} />}
             {session.coachReport && <CoachReportPanel report={session.coachReport} onSeek={seekAudio} />}
             {session.report && (
               <DisclosureSection title="Audio report details" summary="Volume, silence, and consistency">
@@ -2534,7 +2725,7 @@ function SettingsScreen({
           <strong>{reviewPlaybackGain.toFixed(2)}x</strong>
         </label>
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.8.0"} />
+          <Metric label="Version" value={meta?.version ?? "0.9.0"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
@@ -2743,6 +2934,30 @@ function Timeline({ onSeek, session }: { onSeek?: (ms: number) => void; session:
   );
 }
 
+function GuidedComparisonPanel({ comparison }: { comparison: NonNullable<ReturnType<typeof buildGuidedComparison>> }) {
+  const deltaLabel =
+    comparison.delta === null
+      ? "--"
+      : comparison.delta > 0
+        ? `+${comparison.delta}`
+        : String(comparison.delta);
+
+  return (
+    <section className="guided-comparison-panel">
+      <div>
+        <span className="focus-label">{comparison.trackLabel}</span>
+        <strong>Guided comparison</strong>
+        <p>{comparison.message}</p>
+      </div>
+      <div className="comparison-scores">
+        <Metric label="Previous" value={comparison.previousScore === null ? "--" : `${comparison.previousScore}/100`} />
+        <Metric label="Current" value={comparison.currentScore === null ? "--" : `${comparison.currentScore}/100`} />
+        <Metric label="Change" value={deltaLabel} />
+      </div>
+    </section>
+  );
+}
+
 function CoachReportPanel({ onSeek, report }: { onSeek: (ms: number) => void; report: CoachReport }) {
   return (
     <section className="coach-report-panel">
@@ -2921,12 +3136,129 @@ function preferredRecorderOptions(includeVideo: boolean): MediaRecorderOptions |
     : undefined;
 }
 
+async function buildRecordingPreflightChecks({
+  autoTranscriptionEnabled,
+  calibration,
+  recordingMode,
+  stream,
+  trustSnapshot
+}: {
+  autoTranscriptionEnabled: boolean;
+  calibration: CalibrationProfile | null;
+  recordingMode: RecordingMode;
+  stream: MediaStream;
+  trustSnapshot: TrustSnapshot | null;
+}): Promise<RecordingPreflightCheck[]> {
+  const audioTrack = stream.getAudioTracks()[0];
+  const videoTrack = stream.getVideoTracks()[0];
+  const checks: RecordingPreflightCheck[] = [
+    {
+      id: "microphone",
+      label: "Microphone",
+      status: audioTrack && audioTrack.readyState === "live" ? "pass" : "fail",
+      detail:
+        audioTrack && audioTrack.readyState === "live"
+          ? `Ready: ${audioTrack.label || "selected microphone"}`
+          : "Microphone is not active. Refresh devices or check Windows permissions."
+    },
+    {
+      id: "calibration",
+      label: "Calibration",
+      status: calibration ? "pass" : "warning",
+      detail: calibration
+        ? "Personal target range is available."
+        : "Recording can continue, but coaching is better after calibration."
+    },
+    {
+      id: "recorder",
+      label: "Recorder",
+      status: typeof MediaRecorder !== "undefined" ? "pass" : "fail",
+      detail:
+        typeof MediaRecorder !== "undefined"
+          ? "MediaRecorder is available for this session."
+          : "This Windows web runtime cannot create a recorder."
+    },
+    {
+      id: "camera",
+      label: "Camera",
+      status: recordingMode === "audio" || (videoTrack && videoTrack.readyState === "live") ? "pass" : "warning",
+      detail:
+        recordingMode === "audio"
+          ? "Audio-only recording selected."
+          : videoTrack && videoTrack.readyState === "live"
+            ? `Ready: ${videoTrack.label || "selected camera"}`
+            : "Camera track is not active; the session may save audio only."
+    },
+    {
+      id: "transcription",
+      label: "Transcript",
+      status: autoTranscriptionEnabled ? "warning" : "pass",
+      detail: autoTranscriptionEnabled
+        ? "Windows transcription will be attempted locally; save a manual transcript if it is unavailable."
+        : "Built-in transcription is off for this session."
+    }
+  ];
+
+  const storageCheck = await buildStoragePreflightCheck();
+  if (storageCheck) {
+    checks.push(storageCheck);
+  }
+
+  const failedTrust = trustSnapshot?.checks.find((check) => check.status === "fail");
+  if (failedTrust) {
+    checks.push({
+      id: "local-data",
+      label: "Local data",
+      status: "warning",
+      detail: `${failedTrust.label}: ${failedTrust.detail}`
+    });
+  }
+
+  return checks;
+}
+
+async function buildStoragePreflightCheck(): Promise<RecordingPreflightCheck | null> {
+  if (!navigator.storage?.estimate) {
+    return null;
+  }
+
+  try {
+    const estimate = await navigator.storage.estimate();
+    const quota = estimate.quota ?? 0;
+    const usage = estimate.usage ?? 0;
+    const remaining = Math.max(0, quota - usage);
+    const warningLevel = 200 * 1024 * 1024;
+    const failLevel = 50 * 1024 * 1024;
+
+    return {
+      id: "storage",
+      label: "Storage",
+      status: remaining < failLevel ? "fail" : remaining < warningLevel ? "warning" : "pass",
+      detail: `${formatBytes(remaining)} estimated browser storage remains before recording.`
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getReliabilitySummary(checks: RecordingPreflightCheck[]): { label: string; tone: ReliabilityCheckStatus } {
+  if (checks.some((check) => check.status === "fail")) {
+    return { label: "Preflight needs attention", tone: "fail" };
+  }
+  if (checks.some((check) => check.status === "warning")) {
+    return { label: "Preflight has warnings", tone: "warning" };
+  }
+  return { label: "Preflight ready", tone: "pass" };
+}
+
 function buildSessionMetadata(
   title: string,
   prompt: string,
   notes: string,
   tags: string[] = [],
-  goalId: PracticeGoalId = "projection"
+  goalId: PracticeGoalId = "projection",
+  guidedPlan: GuidedSessionPlan | null = null,
+  existingMetadata: SessionMetadata | null = null
 ): SessionMetadata {
   const goal = resolvePracticeGoal(goalId);
   return {
@@ -2936,6 +3268,11 @@ function buildSessionMetadata(
     tags,
     goalId: goal.id,
     goalLabel: goal.label,
+    guidedTrackId: guidedPlan?.track.id ?? existingMetadata?.guidedTrackId,
+    guidedTrackLabel: guidedPlan?.track.label ?? existingMetadata?.guidedTrackLabel,
+    guidedPromptId: guidedPlan ? `${guidedPlan.track.id}-${guidedPlan.attempt}` : existingMetadata?.guidedPromptId,
+    guidedAttempt: guidedPlan?.attempt ?? existingMetadata?.guidedAttempt,
+    guidedFocus: guidedPlan?.track.focus ?? existingMetadata?.guidedFocus,
     updatedAt: new Date().toISOString()
   };
 }

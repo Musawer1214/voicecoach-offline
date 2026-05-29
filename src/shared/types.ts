@@ -58,6 +58,11 @@ export type SessionMetadata = {
   tags: string[];
   goalId?: PracticeGoalId;
   goalLabel?: string;
+  guidedTrackId?: PracticeGoalId;
+  guidedTrackLabel?: string;
+  guidedPromptId?: string;
+  guidedAttempt?: "baseline" | "retry";
+  guidedFocus?: string;
   updatedAt: string;
 };
 

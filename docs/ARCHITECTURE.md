@@ -44,6 +44,7 @@ Responsibilities:
 - review screen and timeline display
 - Coach Mode scoring and progress display
 - Progress Coach aggregation and progress export
+- Guided Practice planning and retry comparison
 - local data trust checks and backup actions
 - progressive disclosure for advanced UI controls
 
@@ -55,22 +56,23 @@ Key files:
 - `src/renderer/audio/events.ts`
 - `src/renderer/audio/report.ts`
 - `src/renderer/coach/coach.ts`
+- `src/renderer/guided/guided.ts`
 - `src/renderer/text/suggestions.ts`
 - `src/shared/progress.ts`
 
 ## UI Flow
 
-`0.8.0` organizes the renderer around a simpler beginner path:
+`0.9.0` organizes the renderer around a guided beginner path:
 
 ```text
-Home -> Practice -> Review -> Progress
+Home -> Guided Practice -> Review -> Retry or Progress
 ```
 
 Advanced controls remain in the app, but are grouped behind disclosure sections:
 
 - calibration keeps microphone selection and the live meter visible, with processing and numeric threshold details collapsed
-- practice keeps the camera/meter/recording surface visible, with capture options and prompts collapsed
-- review keeps playback, timeline, summary metrics, and Coach Mode feedback visible, with reports, transcript tools, metadata, and file paths collapsed
+- practice keeps the guided plan, camera/meter/recording surface, and preflight status visible, with capture options and prompts collapsed
+- review keeps playback, timeline, summary metrics, guided comparison, and Coach Mode feedback visible, with reports, transcript tools, metadata, and file paths collapsed
 - settings starts with local data trust, backup, and data-folder actions, then groups device, camera/transcription, and playback/app information into separate sections
 
 ## Local Data Contract
@@ -169,6 +171,25 @@ type VoiceCoachSession = {
 };
 ```
 
+Guided practice metadata is stored inside `session.metadata`:
+
+```ts
+type SessionMetadata = {
+  title: string;
+  prompt: string;
+  notes: string;
+  tags: string[];
+  goalId?: PracticeGoalId;
+  goalLabel?: string;
+  guidedTrackId?: PracticeGoalId;
+  guidedTrackLabel?: string;
+  guidedPromptId?: string;
+  guidedAttempt?: "baseline" | "retry";
+  guidedFocus?: string;
+  updatedAt: string;
+};
+```
+
 ## Audio Pipeline
 
 The renderer captures microphone input with `navigator.mediaDevices.getUserMedia`.
@@ -215,6 +236,42 @@ The readiness score is weighted by the selected practice goal:
 - Pacing Control emphasizes speaking ratio and pause control
 - Interview Answer balances volume, clarity, pacing, and consistency
 - Confident Delivery emphasizes projection and consistency
+
+## Guided Practice Pipeline
+
+`0.9.0` adds a local guided layer above Coach Mode:
+
+```text
+GUIDED_TRACKS
+  -> baseline or retry plan
+  -> session.metadata guided fields
+  -> coach-report.json
+  -> Review guided comparison
+```
+
+The first built-in tracks are:
+
+- Voice Projection
+- Clear Speaking
+- Pacing Control
+- Interview Answer
+- Confident Delivery
+
+The recommendation logic is deliberately explainable: it chooses a track from the weakest available Coach Mode score and falls back to the selected goal when no score exists.
+
+## Recording Preflight Pipeline
+
+Before recording, the renderer checks:
+
+- microphone track is live
+- calibration is available or clearly marked as missing
+- `MediaRecorder` is available
+- camera track is live when camera mode is selected
+- Windows transcription is enabled or disabled intentionally
+- browser storage estimate has enough room when available
+- local data trust has no blocking failure
+
+These checks are advisory except for a missing microphone or unavailable recorder, which block recording.
 
 ## Progress Coach Pipeline
 

@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.8.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, a simplified UI flow for new users, local data trust checks, one-click local backup, and an installer build script.
+`0.9.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, a simplified UI flow for new users, local data trust checks, one-click local backup, an installer build script, guided practice tracks, baseline/retry comparison, and recording preflight checks.
 
 ## Why Electron
 
@@ -37,6 +37,8 @@ The first risk was whether live volume coaching is useful and reliable. `0.2.0` 
 
 `0.8.0` focuses on first real-user trust. It keeps the coaching features stable, lowers UI density again, adds a local-data health snapshot in Settings, adds a local backup action, and adds a Windows installer build target.
 
+`0.9.0` focuses on the repeatable practice loop. It turns Coach Mode into guided tracks, saves guided metadata with each session, compares retries with the previous guided attempt, and runs compact preflight checks before recording.
+
 ## Electron Launch Note
 
 Some shell environments may set:
@@ -65,6 +67,8 @@ Before marking a version ready:
 - refresh microphone permissions
 - run calibration
 - start a practice session
+- start a guided practice track from Home or Coach
+- confirm preflight checks appear when recording starts
 - verify camera preview appears in camera mode
 - verify audio-only mode still records without camera
 - verify built-in transcription starts or shows a clear warning if unavailable
@@ -76,6 +80,7 @@ Before marking a version ready:
 - stop recording
 - confirm review screen can play the recording
 - confirm Coach Mode scorecard appears in review
+- confirm Review shows guided comparison after a guided retry
 - confirm Update Coach refreshes older sessions
 - confirm Progress screen shows trend and goal summary
 - confirm Export Progress writes `progress-report.md`
