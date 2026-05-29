@@ -44,6 +44,7 @@ Responsibilities:
 - review screen and timeline display
 - Coach Mode scoring and progress display
 - Progress Coach aggregation and progress export
+- local data trust checks and backup actions
 - progressive disclosure for advanced UI controls
 
 Key files:
@@ -59,7 +60,7 @@ Key files:
 
 ## UI Flow
 
-`0.7.0` organizes the renderer around a simpler beginner path:
+`0.8.0` organizes the renderer around a simpler beginner path:
 
 ```text
 Home -> Practice -> Review -> Progress
@@ -70,7 +71,7 @@ Advanced controls remain in the app, but are grouped behind disclosure sections:
 - calibration keeps microphone selection and the live meter visible, with processing and numeric threshold details collapsed
 - practice keeps the camera/meter/recording surface visible, with capture options and prompts collapsed
 - review keeps playback, timeline, summary metrics, and Coach Mode feedback visible, with reports, transcript tools, metadata, and file paths collapsed
-- settings groups device, camera/transcription, and playback/app information into separate sections
+- settings starts with local data trust, backup, and data-folder actions, then groups device, camera/transcription, and playback/app information into separate sections
 
 ## Local Data Contract
 
@@ -90,6 +91,12 @@ VoiceCoachData/
       suggestions.json
       report.md
   progress-report.md
+  backups/
+    VoiceCoachBackup-<date>/
+      backup-manifest.json
+      calibration.json
+      settings.json
+      sessions/
 ```
 
 `calibration.json`:
@@ -222,6 +229,30 @@ sessions/*/transcript.json
 ```
 
 The aggregation is deterministic and local. It reports session count, total practice time, average readiness, best readiness, transcript coverage, per-goal summaries, and weakest skill trends.
+
+## Trust and Backup Pipeline
+
+`0.8.0` adds a local data trust snapshot without introducing a database:
+
+```text
+VoiceCoachData/
+  -> writable folder check
+  -> calibration presence check
+  -> session folder readability check
+  -> recording file presence check
+  -> Windows transcription availability check
+  -> Settings trust panel
+```
+
+Backups are local folder copies created through the main process:
+
+```text
+calibration.json + settings.json + sessions/
+  -> backups/VoiceCoachBackup-<date>/
+  -> backup-manifest.json
+```
+
+This is a recovery aid, not a cloud sync feature.
 
 ## Camera and Transcription Pipeline
 

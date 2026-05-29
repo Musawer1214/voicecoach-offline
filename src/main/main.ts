@@ -3,13 +3,16 @@ import path from "node:path";
 import {
   deleteSession,
   ensureDataDirs,
+  createDataBackup,
   exportProgressReport,
   exportSessionReport,
   getDataDir,
+  getTrustSnapshot,
   listSessions,
   loadCalibration,
   loadSettings,
   revealSessionFolder,
+  revealDataFolder,
   saveCalibration,
   saveCoachReport,
   saveReport,
@@ -102,6 +105,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("sessions:export-report", (_event, payload: SessionIdPayload) => exportSessionReport(payload));
   ipcMain.handle("sessions:export-progress", () => exportProgressReport());
   ipcMain.handle("sessions:reveal-folder", (_event, payload: SessionIdPayload) => revealSessionFolder(payload));
+  ipcMain.handle("data:reveal-folder", () => revealDataFolder());
+  ipcMain.handle("data:trust-snapshot", () => getTrustSnapshot());
+  ipcMain.handle("data:create-backup", () => createDataBackup());
   ipcMain.handle("transcription:start", (_event, options) => startTranscription(mainWindow, options));
   ipcMain.handle("transcription:stop", () => {
     stopTranscription();

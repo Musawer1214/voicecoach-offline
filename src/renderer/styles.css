@@ -280,7 +280,11 @@ button:disabled {
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #e4eaf2;
+  border-radius: 8px;
+  background: #ffffff;
 }
 
 .quick-start-panel {
@@ -326,19 +330,23 @@ button:disabled {
 .summary-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
+  gap: 0;
   overflow: hidden;
   border: 1px solid #dde5ef;
   border-radius: 8px;
-  background: #dde5ef;
+  background: #ffffff;
 }
 
 .summary-strip div {
   display: grid;
   gap: 4px;
-  min-height: 72px;
-  padding: 14px;
+  min-height: 62px;
+  padding: 12px 14px;
   background: #ffffff;
+}
+
+.summary-strip div + div {
+  border-left: 1px solid #edf1f7;
 }
 
 .summary-strip span {
@@ -416,7 +424,6 @@ button:disabled {
 }
 
 .panel,
-.metric,
 .practice-surface {
   border: 1px solid #dde5ef;
   border-radius: 8px;
@@ -431,8 +438,13 @@ button:disabled {
 }
 
 .metric {
-  min-height: 76px;
-  padding: 14px;
+  min-height: auto;
+  padding: 12px 14px;
+  background: transparent;
+}
+
+.metric + .metric {
+  border-left: 1px solid #edf1f7;
 }
 
 .metric span {
@@ -443,9 +455,9 @@ button:disabled {
 
 .metric strong {
   display: block;
-  margin-top: 8px;
+  margin-top: 6px;
   color: #111827;
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
@@ -524,39 +536,45 @@ button:disabled {
   accent-color: #14b8a6;
 }
 
-.goal-selector {
+.goal-selector-wrap {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.goal-selector {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .goal-card {
-  display: grid;
-  gap: 5px;
-  min-height: 92px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
   border: 1px solid #dbe3ee;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 999px;
+  padding: 0 14px;
   color: #1f2937;
   background: #ffffff;
   cursor: pointer;
-  text-align: left;
 }
 
 .goal-card span {
+  font-size: 13px;
   font-weight: 800;
-}
-
-.goal-card small {
-  color: #64748b;
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .goal-card.active {
   border-color: #14b8a6;
-  background: #f0fdfa;
-  box-shadow: inset 0 0 0 1px #14b8a6;
+  color: #042f2e;
+  background: #ccfbf1;
+  box-shadow: none;
+}
+
+.goal-detail {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
 }
 
 .coach-overview,
@@ -568,16 +586,49 @@ button:disabled {
 
 .coach-summary-panel,
 .coach-report-panel {
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e4eaf2;
   border-radius: 8px;
-  padding: 20px;
+  padding: 18px;
   background: #ffffff;
-  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+  box-shadow: none;
 }
 
 .coach-summary-panel {
   display: grid;
   gap: 16px;
+}
+
+.coach-summary-panel.flat-panel {
+  border-color: #edf1f7;
+}
+
+.coach-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 4px 0 6px;
+}
+
+.coach-strip div {
+  display: grid;
+  gap: 2px;
+  min-width: 120px;
+}
+
+.coach-strip span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.coach-strip strong {
+  color: #111827;
+  font-size: 16px;
+}
+
+.next-action-panel {
+  border-left: 3px solid #14b8a6;
+  padding: 4px 0 4px 16px;
 }
 
 .readiness-score {
@@ -1184,6 +1235,120 @@ button:disabled {
   text-align: right;
 }
 
+.trust-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid #dde5ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.trust-hero > div:first-child {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trust-hero span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trust-hero strong {
+  color: #111827;
+}
+
+.trust-hero.pass svg {
+  color: #0f766e;
+}
+
+.trust-hero.warning svg {
+  color: #b45309;
+}
+
+.trust-hero.fail svg {
+  color: #b91c1c;
+}
+
+.trust-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trust-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid #e4eaf2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.trust-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trust-facts span {
+  padding-right: 10px;
+  border-right: 1px solid #e4eaf2;
+}
+
+.trust-facts span:last-child {
+  border-right: 0;
+}
+
+.trust-check-list {
+  display: grid;
+  gap: 2px;
+}
+
+.trust-check {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid #f1f5f9;
+}
+
+.trust-check.pass svg {
+  color: #0f766e;
+}
+
+.trust-check.warning svg {
+  color: #b45309;
+}
+
+.trust-check.fail svg {
+  color: #b91c1c;
+}
+
+.trust-check div {
+  display: grid;
+  gap: 2px;
+}
+
+.trust-check strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.trust-check span,
+.trust-check em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+}
+
 .timeline {
   display: grid;
   gap: 10px;
@@ -1394,7 +1559,6 @@ button:disabled {
   .settings-grid,
   .quick-start-panel,
   .summary-strip,
-  .goal-selector,
   .coach-overview,
   .coach-columns,
   .goal-progress-grid,
@@ -1404,6 +1568,11 @@ button:disabled {
   }
 
   .dictation-helper {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .trust-hero {
     align-items: stretch;
     flex-direction: column;
   }

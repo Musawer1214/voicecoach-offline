@@ -11,7 +11,28 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.5.x`: Progress Coach and assisted transcript entry
 - `0.6.x`: camera sessions and built-in transcription
 - `0.7.x`: simplified UI and release-readiness polish
+- `0.8.x`: first-real-user trust, backup, installer, and UI-density hardening
 - `1.0.0`: stable public release
+
+## 0.8.0 - 2026-05-29
+
+Added:
+
+- local data trust snapshot for data-folder write access, calibration state, readable sessions, recording files, and Windows transcription availability
+- Settings actions to refresh trust checks, open the local data folder, and create a local backup
+- backup folders containing calibration, settings, sessions, and a backup manifest
+- `npm run dist:installer` to build an unsigned Windows installer EXE
+
+Changed:
+
+- Coach Mode now uses compact goal pills instead of large text-heavy goal cards
+- Coach summary metrics are lighter and no longer presented as four separate heavy cards
+- latest coach summary, recent progress, and next drill panels use calmer visual weight
+- shared metric styling is quieter across the app
+
+Tests:
+
+- existing automated test suite and production build pass for this release
 
 ## 0.7.0 - 2026-05-28
 

@@ -1,5 +1,5 @@
 import { app, shell } from "electron";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -7,6 +7,7 @@ import {
   AudioReport,
   CalibrationProfile,
   CoachReport,
+  DataBackupResult,
   SavedSession,
   SaveCoachReportPayload,
   SaveReportPayload,
@@ -14,6 +15,8 @@ import {
   SaveTranscriptPayload,
   SessionIdPayload,
   TextSuggestionDocument,
+  TrustCheck,
+  TrustSnapshot,
   TranscriptDocument,
   UpdateSessionPayload,
   VoiceCoachSession,
@@ -36,6 +39,8 @@ const REPORT_FILE = "report.json";
 const TRANSCRIPT_FILE = "transcript.json";
 const SUGGESTIONS_FILE = "suggestions.json";
 const COACH_REPORT_FILE = "coach-report.json";
+const BACKUPS_DIR = "backups";
+const BACKUP_MANIFEST_FILE = "backup-manifest.json";
 
 export function getDataDir(): string {
   return path.join(app.getPath("userData"), DATA_DIR_NAME);
@@ -282,6 +287,103 @@ export async function revealSessionFolder(payload: SessionIdPayload): Promise<st
   return shell.openPath(found.folderPath);
 }
 
+export async function revealDataFolder(): Promise<string> {
+  await ensureDataDirs();
+  return shell.openPath(getDataDir());
+}
+
+export async function getTrustSnapshot(): Promise<TrustSnapshot> {
+  await ensureDataDirs();
+  const sessionHealth = await inspectSessionFolders();
+  const calibration = await loadCalibration();
+  const writeCheck = await checkDataDirWritable();
+  const checks: TrustCheck[] = [
+    {
+      id: "data-folder",
+      label: "Local data folder",
+      status: writeCheck.ok ? "pass" : "fail",
+      detail: writeCheck.ok ? "VoiceCoach can write local files." : writeCheck.message,
+      action: writeCheck.ok ? undefined : "Check Windows permissions or OneDrive sync locks."
+    },
+    {
+      id: "calibration",
+      label: "Calibration",
+      status: calibration ? "pass" : "warning",
+      detail: calibration ? "A microphone calibration profile is saved." : "No calibration profile is saved yet.",
+      action: calibration ? undefined : "Run calibration before judging volume scores."
+    },
+    {
+      id: "sessions",
+      label: "Session files",
+      status: sessionHealth.incompleteSessionCount === 0 ? "pass" : "warning",
+      detail:
+        sessionHealth.incompleteSessionCount === 0
+          ? `${sessionHealth.validSessionCount} readable sessions found.`
+          : `${sessionHealth.incompleteSessionCount} session folders need attention.`,
+      action: sessionHealth.incompleteSessionCount === 0 ? undefined : "Open the data folder and inspect incomplete sessions."
+    },
+    {
+      id: "recordings",
+      label: "Recordings",
+      status: sessionHealth.missingRecordingCount === 0 ? "pass" : "fail",
+      detail:
+        sessionHealth.missingRecordingCount === 0
+          ? "Every readable session has a recording file."
+          : `${sessionHealth.missingRecordingCount} sessions are missing recording.webm.`,
+      action: sessionHealth.missingRecordingCount === 0 ? undefined : "Create a backup before deleting or editing sessions."
+    },
+    {
+      id: "transcription",
+      label: "Built-in transcription",
+      status: process.platform === "win32" ? "pass" : "warning",
+      detail:
+        process.platform === "win32"
+          ? "Windows speech recognition can be attempted locally."
+          : "Built-in Windows transcription is only available on Windows.",
+      action: process.platform === "win32" ? undefined : "Use manual transcript entry on this platform."
+    }
+  ];
+
+  return {
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    appVersion: app.getVersion(),
+    dataDir: getDataDir(),
+    sessionCount: sessionHealth.sessionCount,
+    validSessionCount: sessionHealth.validSessionCount,
+    incompleteSessionCount: sessionHealth.incompleteSessionCount,
+    missingRecordingCount: sessionHealth.missingRecordingCount,
+    totalRecordingBytes: sessionHealth.totalRecordingBytes,
+    latestSessionAt: sessionHealth.latestSessionAt,
+    checks
+  };
+}
+
+export async function createDataBackup(): Promise<DataBackupResult> {
+  await ensureDataDirs();
+  const createdAt = new Date().toISOString();
+  const backupPath = path.join(getDataDir(), BACKUPS_DIR, `VoiceCoachBackup-${sanitizeFolderName(createdAt)}`);
+  await mkdir(backupPath, { recursive: true });
+
+  await copyOptionalFile(path.join(getDataDir(), CALIBRATION_FILE), path.join(backupPath, CALIBRATION_FILE));
+  await copyOptionalFile(path.join(getDataDir(), SETTINGS_FILE), path.join(backupPath, SETTINGS_FILE));
+  await copyDirectory(path.join(getDataDir(), SESSIONS_DIR), path.join(backupPath, SESSIONS_DIR));
+
+  const sessionCount = (await listSessions()).length;
+  const manifestPath = path.join(backupPath, BACKUP_MANIFEST_FILE);
+  const manifest: DataBackupResult = {
+    schemaVersion: 1,
+    createdAt,
+    backupPath,
+    sessionCount,
+    sizeBytes: 0
+  };
+  await writeJson(manifestPath, manifest);
+  manifest.sizeBytes = await getDirectorySize(backupPath);
+  await writeJson(manifestPath, manifest);
+  return manifest;
+}
+
 function toSavedSession(
   session: VoiceCoachSession,
   report: AudioReport | null,
@@ -341,6 +443,131 @@ async function readSessionExtras(folderPath: string): Promise<{
   ]);
 
   return { report, transcript, textSuggestions, coachReport };
+}
+
+async function inspectSessionFolders(): Promise<{
+  sessionCount: number;
+  validSessionCount: number;
+  incompleteSessionCount: number;
+  missingRecordingCount: number;
+  totalRecordingBytes: number;
+  latestSessionAt: string | null;
+}> {
+  const sessionsRoot = path.join(getDataDir(), SESSIONS_DIR);
+  const entries = await readdir(sessionsRoot, { withFileTypes: true });
+  let sessionCount = 0;
+  let validSessionCount = 0;
+  let incompleteSessionCount = 0;
+  let missingRecordingCount = 0;
+  let totalRecordingBytes = 0;
+  let latestSessionAt: string | null = null;
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    sessionCount += 1;
+    const folderPath = path.join(sessionsRoot, entry.name);
+    const sessionPath = path.join(folderPath, SESSION_FILE);
+    const recordingPath = path.join(folderPath, RECORDING_FILE);
+
+    try {
+      const raw = await readFile(sessionPath, "utf8");
+      const session = JSON.parse(raw) as VoiceCoachSession;
+      if (!isVoiceCoachSession(session)) {
+        incompleteSessionCount += 1;
+        continue;
+      }
+
+      validSessionCount += 1;
+      if (latestSessionAt === null || session.createdAt > latestSessionAt) {
+        latestSessionAt = session.createdAt;
+      }
+
+      try {
+        const recordingStat = await stat(recordingPath);
+        if (!recordingStat.isFile() || recordingStat.size <= 0) {
+          missingRecordingCount += 1;
+        } else {
+          totalRecordingBytes += recordingStat.size;
+        }
+      } catch {
+        missingRecordingCount += 1;
+      }
+    } catch {
+      incompleteSessionCount += 1;
+    }
+  }
+
+  return {
+    sessionCount,
+    validSessionCount,
+    incompleteSessionCount,
+    missingRecordingCount,
+    totalRecordingBytes,
+    latestSessionAt
+  };
+}
+
+async function checkDataDirWritable(): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  const testPath = path.join(getDataDir(), ".voicecoach-write-test");
+  try {
+    await writeFile(testPath, "ok", "utf8");
+    await rm(testPath, { force: true });
+    return { ok: true, message: "Writable" };
+  } catch (error) {
+    return { ok: false, message: formatStorageError(error) };
+  }
+}
+
+async function copyOptionalFile(source: string, destination: string): Promise<void> {
+  try {
+    await copyFile(source, destination);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+async function copyDirectory(source: string, destination: string): Promise<void> {
+  await mkdir(destination, { recursive: true });
+  const entries = await readdir(source, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const sourcePath = path.join(source, entry.name);
+    const destinationPath = path.join(destination, entry.name);
+    if (entry.isDirectory()) {
+      await copyDirectory(sourcePath, destinationPath);
+    } else if (entry.isFile()) {
+      await copyFile(sourcePath, destinationPath);
+    }
+  }
+}
+
+async function getDirectorySize(directoryPath: string): Promise<number> {
+  const entries = await readdir(directoryPath, { withFileTypes: true });
+  let total = 0;
+
+  for (const entry of entries) {
+    const entryPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      total += await getDirectorySize(entryPath);
+    } else if (entry.isFile()) {
+      total += (await stat(entryPath)).size;
+    }
+  }
+
+  return total;
+}
+
+function formatStorageError(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error);
 }
 
 async function findSessionFolder(sessionId: string): Promise<{

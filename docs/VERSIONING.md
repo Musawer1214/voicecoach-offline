@@ -14,6 +14,7 @@ VoiceCoach Offline uses semantic versioning, with `0.x` versions treated as acti
 0.5.0  Progress Coach, progress export, Windows speech helper
 0.6.0  Camera sessions and built-in Windows transcription
 0.7.0  Simplified UI and progressive disclosure
+0.8.0  First real-user trust checks, backup, installer, UI density pass
 1.0.0  stable offline speaking coach
 ```
 
@@ -30,7 +31,7 @@ Patch versions are for fixes:
 Use Git tags for releases:
 
 ```powershell
-git tag v0.7.0
+git tag v0.8.0
 git push origin main --tags
 ```
 
@@ -53,5 +54,6 @@ Before publishing a public GitHub release:
 - run `npm run build`
 - run `npm run package:dir`
 - run `npm run dist:portable`
+- run `npm run dist:installer`
 - manually test microphone calibration and recording
-- attach the portable EXE only if the build is intended for users
+- attach the portable EXE or installer EXE only if the build is intended for users

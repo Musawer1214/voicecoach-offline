@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.7.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, and a simplified UI flow for new users.
+`0.8.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, a simplified UI flow for new users, local data trust checks, one-click local backup, and an installer build script.
 
 ## Why Electron
 
@@ -33,7 +33,9 @@ The first risk was whether live volume coaching is useful and reliable. `0.2.0` 
 
 `0.6.0` adds built-in transcription through a narrow provider bridge instead of automating the Windows `Win+H` overlay. The first provider uses Windows `System.Speech` through a local helper process. If this provider is not reliable enough on every Windows 11 machine, the same app contract can accept a native Windows Runtime helper or a bundled open-source model later.
 
-`0.7.0` does not add new capture models. It simplifies the user flow with progressive disclosure so new users can see the next action first while advanced camera, microphone, transcript, file, and metadata controls remain available.
+`0.7.0` did not add new capture models. It simplified the user flow with progressive disclosure so new users can see the next action first while advanced camera, microphone, transcript, file, and metadata controls remain available.
+
+`0.8.0` focuses on first real-user trust. It keeps the coaching features stable, lowers UI density again, adds a local-data health snapshot in Settings, adds a local backup action, and adds a Windows installer build target.
 
 ## Electron Launch Note
 
@@ -79,9 +81,12 @@ Before marking a version ready:
 - confirm Export Progress writes `progress-report.md`
 - confirm Windows speech helper focuses the transcript editor
 - confirm advanced capture, transcript, and file tools remain available inside disclosure sections
+- confirm Settings shows local data trust status
+- confirm Create Backup writes a backup folder with a manifest
 - confirm exported Markdown includes Coach Mode
 - confirm session files are saved locally
 - run `npm test`
 - run `npm run build`
 - run `npm run package:dir`
 - run `npm run dist:portable`
+- run `npm run dist:installer`

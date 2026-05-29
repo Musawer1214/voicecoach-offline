@@ -53,6 +53,7 @@ VoiceCoach Offline v0.3.2
 VoiceCoach Offline v0.4.0
 VoiceCoach Offline v0.6.0
 VoiceCoach Offline v0.7.0
+VoiceCoach Offline v0.8.0
 ```
 
 ## Release Notes Template
@@ -78,4 +79,5 @@ VoiceCoach Offline v0.7.0
 - npm run build
 - npm run package:dir
 - npm run dist:portable
+- npm run dist:installer
 ```

@@ -1,7 +1,9 @@
 import {
   Activity,
   AlertTriangle,
+  Archive,
   BarChart3,
+  CheckCircle2,
   ChevronDown,
   Download,
   ExternalLink,
@@ -15,6 +17,7 @@ import {
   RotateCcw,
   Save,
   Settings,
+  ShieldCheck,
   Sparkles,
   SlidersHorizontal,
   Square,
@@ -41,6 +44,7 @@ import {
   SessionMetadata,
   TranscriptDocument,
   TranscriptionEvent,
+  TrustSnapshot,
   VoiceCoachSession,
   VolumeSample
 } from "../shared/types";
@@ -89,6 +93,7 @@ const initialLevel = {
 export function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [meta, setMeta] = useState<AppMeta | null>(null);
+  const [trustSnapshot, setTrustSnapshot] = useState<TrustSnapshot | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedDeviceId, setSelectedDeviceId] = useState("");
@@ -166,13 +171,15 @@ export function App() {
 
   async function initializeApp() {
     try {
-      const [appMeta, savedSettings, savedCalibration, savedSessions] = await Promise.all([
+      const [appMeta, savedSettings, savedCalibration, savedSessions, savedTrustSnapshot] = await Promise.all([
         window.voiceCoach.getAppMeta(),
         window.voiceCoach.loadSettings(),
         window.voiceCoach.loadCalibration(),
-        window.voiceCoach.listSessions()
+        window.voiceCoach.listSessions(),
+        window.voiceCoach.getTrustSnapshot()
       ]);
       setMeta(appMeta);
+      setTrustSnapshot(savedTrustSnapshot);
       setSettings(savedSettings);
       setMicrophoneProcessingMode(savedSettings?.microphoneProcessingMode ?? DEFAULT_MICROPHONE_PROCESSING_MODE);
       setReviewPlaybackGain(clampReviewPlaybackGain(savedSettings?.reviewPlaybackGain ?? DEFAULT_REVIEW_PLAYBACK_GAIN));
@@ -189,6 +196,21 @@ export function App() {
     } catch (appError) {
       setError(formatError(appError));
     }
+  }
+
+  async function refreshTrustSnapshot() {
+    try {
+      setTrustSnapshot(await window.voiceCoach.getTrustSnapshot());
+    } catch (trustError) {
+      setError(formatError(trustError));
+    }
+  }
+
+  async function refreshSessionsAndTrust(): Promise<SavedSession[]> {
+    const savedSessions = await window.voiceCoach.listSessions();
+    setSessions(savedSessions);
+    setTrustSnapshot(await window.voiceCoach.getTrustSnapshot());
+    return savedSessions;
   }
 
   async function refreshDevices(
@@ -409,6 +431,7 @@ export function App() {
       await window.voiceCoach.saveCalibration(profile);
       setCalibration(profile);
       calibrationRef.current = profile;
+      await refreshTrustSnapshot();
       setWarning("Calibration saved");
       stopMicrophone();
     } catch (calibrationError) {
@@ -571,8 +594,7 @@ export function App() {
           coachReport
         });
       }
-      const savedSessions = await window.voiceCoach.listSessions();
-      setSessions(savedSessions);
+      await refreshSessionsAndTrust();
       setReviewSession(savedWithTranscript);
       setScreen("review");
       setPracticeTitle("");
@@ -762,9 +784,8 @@ export function App() {
         report: buildAudioReport(updatedWithSnapshot, calibration)
       });
       const savedWithCoach = await refreshCoachReport(saved);
-      const savedSessions = await window.voiceCoach.listSessions();
       setReviewSession(savedWithCoach);
-      setSessions(savedSessions);
+      await refreshSessionsAndTrust();
       setWarning("Session reanalyzed with current calibration");
     } catch (reanalyzeError) {
       setError(formatError(reanalyzeError));
@@ -781,9 +802,8 @@ export function App() {
       const updatedSession = { ...reviewSession.session, metadata };
       const saved = await window.voiceCoach.updateSession({ session: updatedSession });
       const savedWithCoach = await refreshCoachReport(saved);
-      const savedSessions = await window.voiceCoach.listSessions();
       setReviewSession(savedWithCoach);
-      setSessions(savedSessions);
+      await refreshSessionsAndTrust();
       setWarning("Session details saved");
     } catch (metadataError) {
       setError(formatError(metadataError));
@@ -827,6 +847,26 @@ export function App() {
     }
   }
 
+  async function revealDataFolder() {
+    try {
+      setError("");
+      await window.voiceCoach.revealDataFolder();
+    } catch (revealError) {
+      setError(formatError(revealError));
+    }
+  }
+
+  async function createDataBackup() {
+    try {
+      setError("");
+      const backup = await window.voiceCoach.createDataBackup();
+      await refreshTrustSnapshot();
+      setWarning(`Backup created: ${backup.backupPath}`);
+    } catch (backupError) {
+      setError(formatError(backupError));
+    }
+  }
+
   async function deleteReviewSession() {
     if (!reviewSession) {
       return;
@@ -840,8 +880,7 @@ export function App() {
     try {
       setError("");
       await window.voiceCoach.deleteSession({ sessionId: reviewSession.session.id });
-      const savedSessions = await window.voiceCoach.listSessions();
-      setSessions(savedSessions);
+      const savedSessions = await refreshSessionsAndTrust();
       setReviewSession(savedSessions[0] ?? null);
       setWarning("Session deleted");
     } catch (deleteError) {
@@ -870,9 +909,8 @@ export function App() {
         textSuggestions
       });
       const savedWithCoach = await refreshCoachReport(saved);
-      const savedSessions = await window.voiceCoach.listSessions();
       setReviewSession(savedWithCoach);
-      setSessions(savedSessions);
+      await refreshSessionsAndTrust();
       setWarning("Transcript analyzed locally");
     } catch (transcriptError) {
       setError(formatError(transcriptError));
@@ -887,9 +925,8 @@ export function App() {
     try {
       setError("");
       const saved = await refreshCoachReport(reviewSession);
-      const savedSessions = await window.voiceCoach.listSessions();
       setReviewSession(saved);
-      setSessions(savedSessions);
+      await refreshSessionsAndTrust();
       setWarning("Coach scorecard updated");
     } catch (coachError) {
       setError(formatError(coachError));
@@ -916,7 +953,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.7.0"}</span>
+            <span>v{meta?.version ?? "0.8.0"}</span>
           </div>
         </div>
 
@@ -963,6 +1000,7 @@ export function App() {
             onOpenProgress={() => setScreen("progress")}
             recordingMode={recordingMode}
             autoTranscriptionEnabled={autoTranscriptionEnabled}
+            trustSnapshot={trustSnapshot}
           />
         )}
 
@@ -1072,6 +1110,10 @@ export function App() {
             onRefreshDevices={() => refreshDevices(true)}
             calibration={calibration}
             settings={settings}
+            trustSnapshot={trustSnapshot}
+            onCreateDataBackup={createDataBackup}
+            onRefreshTrust={refreshTrustSnapshot}
+            onRevealDataFolder={revealDataFolder}
             microphoneProcessingMode={microphoneProcessingMode}
             onSelectMicrophoneProcessingMode={selectMicrophoneProcessingMode}
             reviewPlaybackGain={reviewPlaybackGain}
@@ -1139,6 +1181,7 @@ function HomeScreen({
   calibration,
   sessions,
   recordingMode,
+  trustSnapshot,
   onOpenProgress,
   onStartPractice,
   onStartCalibration,
@@ -1148,6 +1191,7 @@ function HomeScreen({
   calibration: CalibrationProfile | null;
   recordingMode: RecordingMode;
   sessions: SavedSession[];
+  trustSnapshot: TrustSnapshot | null;
   onOpenProgress: () => void;
   onStartPractice: () => void;
   onStartCalibration: () => void;
@@ -1157,6 +1201,7 @@ function HomeScreen({
   const coachAverage = formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore));
   const videoSessionCount = sessions.filter((session) => session.session.recordingKind === "video").length;
   const transcriptCount = sessions.filter((session) => session.transcript?.source === "windows_builtin").length;
+  const trustSummary = getTrustSummary(trustSnapshot);
 
   return (
     <section className="screen">
@@ -1208,8 +1253,8 @@ function HomeScreen({
           <strong>{autoTranscriptionEnabled ? "Built in" : "Off"}</strong>
         </div>
         <div>
-          <span>Sessions</span>
-          <strong>{sessions.length} total</strong>
+          <span>Local Data</span>
+          <strong>{trustSummary.label}</strong>
         </div>
       </section>
 
@@ -1254,7 +1299,7 @@ function CoachScreen({
       <header className="screen-header">
         <div>
           <h1>Coach Mode</h1>
-          <p>Choose a practice goal, record a take, and review a local scorecard with the next drill.</p>
+          <p>Pick a goal and let the last score choose the next drill.</p>
         </div>
         <div className="header-actions">
           <button className="primary-button" onClick={onStartPractice}>
@@ -1265,18 +1310,30 @@ function CoachScreen({
 
       <GoalSelector activeGoalId={goalId} onChange={onGoalChange} />
 
-      <div className="dashboard-grid">
-        <Metric label="Active Goal" value={selectedGoal.label} />
-        <Metric label="Average Score" value={averageScore} />
-        <Metric label="Best Score" value={bestScore ? `${bestScore}/100` : "--"} />
-        <Metric label="Coach Reports" value={String(coachSessions.length)} />
-      </div>
+      <section className="coach-strip" aria-label="Coach summary">
+        <div>
+          <span>Active goal</span>
+          <strong>{selectedGoal.label}</strong>
+        </div>
+        <div>
+          <span>Average</span>
+          <strong>{averageScore}</strong>
+        </div>
+        <div>
+          <span>Best</span>
+          <strong>{bestScore ? `${bestScore}/100` : "--"}</strong>
+        </div>
+        <div>
+          <span>Reports</span>
+          <strong>{coachSessions.length}</strong>
+        </div>
+      </section>
 
       <section className="coach-overview">
-        <div className="coach-summary-panel">
+        <div className="coach-summary-panel flat-panel">
           <div className="panel-title">
             <Sparkles size={18} />
-            <h2>Latest Coach Summary</h2>
+            <h2>Latest Summary</h2>
           </div>
           {latest ? (
             <>
@@ -1294,7 +1351,7 @@ function CoachScreen({
           )}
         </div>
 
-        <div className="coach-summary-panel">
+        <div className="coach-summary-panel flat-panel">
           <div className="panel-title">
             <TrendingUp size={18} />
             <h2>Recent Progress</h2>
@@ -1316,12 +1373,9 @@ function CoachScreen({
       </section>
 
       {latest && (
-        <section className="panel">
-          <div className="panel-title">
-            <Trophy size={18} />
-            <h2>Next Drill</h2>
-          </div>
+        <section className="next-action-panel">
           <div className="next-drill">
+            <span className="focus-label">Next drill</span>
             <strong>{latest.nextDrill.title}</strong>
             <p>{latest.nextDrill.detail}</p>
             <ol>
@@ -1424,7 +1478,7 @@ function ProgressScreen({
                 <strong>{goal.goalLabel}</strong>
                 <span>{goal.sessionCount} session{goal.sessionCount === 1 ? "" : "s"}</span>
                 <ProgressBar value={goal.averageReadinessScore ?? 0} />
-                <em>Avg {formatNullableScore(goal.averageReadinessScore)} · Weakest {formatSkillLabel(goal.weakestSkill)}</em>
+                <em>Avg {formatNullableScore(goal.averageReadinessScore)} - Weakest {formatSkillLabel(goal.weakestSkill)}</em>
               </div>
             ))
           ) : (
@@ -1487,19 +1541,23 @@ function GoalSelector({
   disabled?: boolean;
   onChange: (goalId: PracticeGoalId) => void;
 }) {
+  const activeGoal = resolvePracticeGoal(activeGoalId);
+
   return (
-    <section className="goal-selector" aria-label="Practice goals">
-      {PRACTICE_GOALS.map((goal) => (
-        <button
-          key={goal.id}
-          className={`goal-card ${activeGoalId === goal.id ? "active" : ""}`}
-          disabled={disabled}
-          onClick={() => onChange(goal.id)}
-        >
-          <span>{goal.label}</span>
-          <small>{goal.detail}</small>
-        </button>
-      ))}
+    <section className="goal-selector-wrap" aria-label="Practice goals">
+      <div className="goal-selector">
+        {PRACTICE_GOALS.map((goal) => (
+          <button
+            key={goal.id}
+            className={`goal-card ${activeGoalId === goal.id ? "active" : ""}`}
+            disabled={disabled}
+            onClick={() => onChange(goal.id)}
+          >
+            <span>{goal.label}</span>
+          </button>
+        ))}
+      </div>
+      <p className="goal-detail">{activeGoal.detail}</p>
     </section>
   );
 }
@@ -2325,7 +2383,10 @@ function SettingsScreen({
   onCameraFrameRateChange,
   onCameraMirrorChange,
   onCameraResolutionChange,
+  onCreateDataBackup,
   onRefreshDevices,
+  onRefreshTrust,
+  onRevealDataFolder,
   onSelectCamera,
   onSelectDevice,
   onSelectMicrophoneProcessingMode,
@@ -2334,7 +2395,8 @@ function SettingsScreen({
   selectedDeviceId,
   microphoneProcessingMode,
   reviewPlaybackGain,
-  settings
+  settings,
+  trustSnapshot
 }: {
   autoTranscriptionEnabled: boolean;
   calibration: CalibrationProfile | null;
@@ -2348,7 +2410,10 @@ function SettingsScreen({
   onCameraFrameRateChange: (frameRate: number) => void;
   onCameraMirrorChange: (mirrored: boolean) => void;
   onCameraResolutionChange: (resolution: CameraResolution) => void;
+  onCreateDataBackup: () => void;
   onRefreshDevices: () => void;
+  onRefreshTrust: () => void;
+  onRevealDataFolder: () => void;
   onSelectCamera: (id: string) => void;
   onSelectDevice: (id: string) => void;
   onSelectMicrophoneProcessingMode: (mode: MicrophoneProcessingMode) => void;
@@ -2358,7 +2423,10 @@ function SettingsScreen({
   microphoneProcessingMode: MicrophoneProcessingMode;
   reviewPlaybackGain: number;
   settings: AppSettings | null;
+  trustSnapshot: TrustSnapshot | null;
 }) {
+  const trustSummary = getTrustSummary(trustSnapshot);
+
   return (
     <section className="screen">
       <header className="screen-header compact">
@@ -2367,6 +2435,27 @@ function SettingsScreen({
           <p>Keep everyday controls visible and advanced device options tucked away.</p>
         </div>
       </header>
+
+      <section className={`trust-hero ${trustSummary.tone}`}>
+        <div>
+          <ShieldCheck size={20} />
+          <span>Local data</span>
+          <strong>{trustSummary.label}</strong>
+        </div>
+        <div className="trust-actions">
+          <button className="secondary-button compact-button" onClick={onRefreshTrust}>
+            <RotateCcw size={16} /> Check
+          </button>
+          <button className="secondary-button compact-button" onClick={onRevealDataFolder}>
+            <FolderOpen size={16} /> Data Folder
+          </button>
+          <button className="primary-button compact-button" onClick={onCreateDataBackup}>
+            <Archive size={16} /> Backup
+          </button>
+        </div>
+      </section>
+
+      <TrustPanel snapshot={trustSnapshot} />
 
       <DisclosureSection title="Microphone" summary={settings?.selectedDeviceLabel ?? "Default device"} defaultOpen>
         <DevicePicker
@@ -2445,7 +2534,7 @@ function SettingsScreen({
           <strong>{reviewPlaybackGain.toFixed(2)}x</strong>
         </label>
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.7.0"} />
+          <Metric label="Version" value={meta?.version ?? "0.8.0"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
@@ -2455,6 +2544,34 @@ function SettingsScreen({
           <Metric label="Calibration" value={calibration ? calibration.createdAt.slice(0, 10) : "Not saved"} />
         </div>
       </DisclosureSection>
+    </section>
+  );
+}
+
+function TrustPanel({ snapshot }: { snapshot: TrustSnapshot | null }) {
+  if (!snapshot) {
+    return <section className="trust-panel empty-state">Checking local data...</section>;
+  }
+
+  return (
+    <section className="trust-panel">
+      <div className="trust-facts">
+        <span>{snapshot.validSessionCount} readable sessions</span>
+        <span>{formatBytes(snapshot.totalRecordingBytes)} recordings</span>
+        <span>{snapshot.latestSessionAt ? `Latest ${new Date(snapshot.latestSessionAt).toLocaleDateString()}` : "No sessions yet"}</span>
+      </div>
+      <div className="trust-check-list">
+        {snapshot.checks.map((check) => (
+          <div className={`trust-check ${check.status}`} key={check.id}>
+            {check.status === "pass" ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+            <div>
+              <strong>{check.label}</strong>
+              <span>{check.detail}</span>
+              {check.action && <em>{check.action}</em>}
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -2877,6 +2994,38 @@ function formatRecordingKind(kind?: RecordingMode): string {
 
 function formatNullableScore(value: number | null): string {
   return value === null ? "--" : `${value}/100`;
+}
+
+function getTrustSummary(snapshot: TrustSnapshot | null): { label: string; tone: "pass" | "warning" | "fail" } {
+  if (!snapshot) {
+    return { label: "Checking", tone: "warning" };
+  }
+
+  if (snapshot.checks.some((check) => check.status === "fail")) {
+    return { label: "Needs attention", tone: "fail" };
+  }
+
+  if (snapshot.checks.some((check) => check.status === "warning")) {
+    return { label: "Review recommended", tone: "warning" };
+  }
+
+  return { label: "Ready", tone: "pass" };
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) {
+    return `${value} B`;
+  }
+
+  const units = ["KB", "MB", "GB"];
+  let amount = value / 1024;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 function formatSkillLabel(value: keyof CoachReport["scores"] | null): string {

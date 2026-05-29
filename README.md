@@ -4,13 +4,15 @@
 
 VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio or camera practice sessions, gives live low-volume feedback, captures built-in speech transcripts when available, and saves local review reports.
 
-Current version: `0.7.0`
+Current version: `0.8.0`
 
-`0.7.0` is the Simplified Practice UI release before the planned `1.0.0` stabilization release.
+`0.8.0` is the First Real User release: calmer UI, local data trust checks, backup support, and installer output before the planned `1.0.0` stabilization release.
 
 ## Highlights
 
 - Fully offline by default: no cloud service, account, or internet connection required.
+- Local data trust checks for calibration, readable sessions, recording files, and data-folder write access.
+- One-click local data backup from Settings.
 - Calibrated live volume meter with low-volume warnings.
 - Audio-only or camera-plus-microphone local recording with `recording.webm` session files.
 - Camera selector, resolution, frame-rate, and mirror-preview controls.
@@ -22,15 +24,15 @@ Current version: `0.7.0`
 - Windows speech input helper remains available for manual fallback transcript entry.
 - Exportable Markdown review reports.
 - Exportable Markdown progress reports.
-- Windows unpacked and portable build scripts.
+- Windows unpacked, portable, and installer build scripts.
 
-## What's New in 0.7.0
+## What's New in 0.8.0
 
-- Cleaner home screen with quick Practice, Calibration, and Progress actions.
-- Practice screen now puts the live camera/meter/recording surface first.
-- Camera, transcription, prompts, microphone processing, and metadata are now organized under collapsible sections.
-- Review screen keeps playback, timeline, summary, and coach feedback visible while moving deeper details behind disclosure panels.
-- Settings are grouped into microphone, camera/transcription, and playback/app info sections.
+- Added local data trust diagnostics in Settings.
+- Added one-click local backup for calibration, settings, and session folders.
+- Added a dedicated `npm run dist:installer` script for a Windows installer EXE.
+- Reduced Coach Mode visual density with compact goal pills, a lighter score strip, and fewer heavy boxes.
+- Reworked metrics to read more like quiet summaries instead of separate cards everywhere.
 
 ## Status
 
@@ -87,12 +89,24 @@ Create an unsigned portable EXE:
 npm run dist:portable
 ```
 
+Create an unsigned Windows installer EXE:
+
+```powershell
+npm run dist:installer
+```
+
 ## Build Output
 
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.7.0.exe
+release/VoiceCoach Offline 0.8.0.exe
+```
+
+Installer builds are written to:
+
+```text
+release/VoiceCoach Offline Setup 0.8.0.exe
 ```
 
 Unpacked builds are written to:
@@ -121,6 +135,8 @@ VoiceCoachData/
       suggestions.json
       report.md
   progress-report.md
+  backups/
+    VoiceCoachBackup-<date>/
 ```
 
 Session, calibration, report, coach, transcript, and suggestion files use `schemaVersion: 1`.
@@ -144,7 +160,7 @@ Built-in transcription uses the Windows `System.Speech` recognizer on the local 
 
 ## Roadmap
 
-- `0.7.x`: UI/UX simplification, accessibility polish, and release-hardening fixes.
+- `0.8.x`: first-real-user trust, backup, installer, and UI-density fixes.
 - `1.0.0`: stable offline speaking coach release.
 - Post-`1.0.0`: evaluate optional bundled open-source transcription models if Windows recognition is not enough.
 

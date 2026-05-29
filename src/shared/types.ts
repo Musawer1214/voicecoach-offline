@@ -199,6 +199,38 @@ export type AppMeta = {
   dataDir: string;
 };
 
+export type TrustCheckStatus = "pass" | "warning" | "fail";
+
+export type TrustCheck = {
+  id: string;
+  label: string;
+  status: TrustCheckStatus;
+  detail: string;
+  action?: string;
+};
+
+export type TrustSnapshot = {
+  schemaVersion: 1;
+  generatedAt: string;
+  appVersion: string;
+  dataDir: string;
+  sessionCount: number;
+  validSessionCount: number;
+  incompleteSessionCount: number;
+  missingRecordingCount: number;
+  totalRecordingBytes: number;
+  latestSessionAt: string | null;
+  checks: TrustCheck[];
+};
+
+export type DataBackupResult = {
+  schemaVersion: 1;
+  createdAt: string;
+  backupPath: string;
+  sessionCount: number;
+  sizeBytes: number;
+};
+
 export type SavedSession = {
   session: VoiceCoachSession;
   report: AudioReport | null;
@@ -304,6 +336,9 @@ export type VoiceCoachApi = {
   exportSessionReport(payload: SessionIdPayload): Promise<string>;
   exportProgressReport(): Promise<string>;
   revealSessionFolder(payload: SessionIdPayload): Promise<string>;
+  revealDataFolder(): Promise<string>;
+  getTrustSnapshot(): Promise<TrustSnapshot>;
+  createDataBackup(): Promise<DataBackupResult>;
   startTranscription(options?: TranscriptionStartOptions): Promise<TranscriptionStartResult>;
   stopTranscription(): Promise<void>;
   onTranscriptionEvent(callback: (event: TranscriptionEvent) => void): () => void;
