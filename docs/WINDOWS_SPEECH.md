@@ -1,6 +1,6 @@
 # Windows Speech Notes
 
-VoiceCoach Offline `0.9.0` supports built-in Windows transcription and still keeps Windows speech input as a fallback transcript-entry workflow.
+VoiceCoach Offline `0.9.1` supports built-in Windows transcription and still keeps Windows speech input as a fallback transcript-entry workflow.
 
 ## Built-in Provider
 
@@ -14,13 +14,17 @@ error
 stopped
 ```
 
-The renderer shows partial/final text during recording. When the session is saved, VoiceCoach writes the final text to `transcript.json` with source `windows_builtin`, then runs local grammar and clarity suggestions.
+The renderer shows partial/final text during recording. VoiceCoach also records a clean 16 kHz mono PCM sidecar named `transcription.wav` while you speak. When the session is saved, the app runs a second automatic recognition pass from that saved audio. If that pass returns text, VoiceCoach writes `transcript.json` with source `windows_file`, then runs local grammar and clarity suggestions.
+
+The file-based pass is now the preferred final transcript path because it uses the exact microphone audio captured by the app. The live recognizer remains useful for showing words during the take.
 
 This is not the same as embedding the Windows `Win+H` popup. The popup is a Windows-owned UI. VoiceCoach uses its own app-owned provider bridge so the transcript can be saved with the session.
 
-## Fallback Entry
+## Optional Fallback Entry
 
 In the Review screen, the **Use Windows Speech** button still focuses the transcript editor and marks the transcript source as `windows_dictation`. You can then use Windows voice typing or Windows Voice Access to put text into the box, and VoiceCoach will analyze the resulting transcript locally after you save it.
+
+This is a fallback only. The normal product flow is automatic: speak during recording, stop, and let VoiceCoach create the transcript from the saved audio.
 
 ## Windows Voice Typing vs Voice Access vs System.Speech
 

@@ -4,7 +4,7 @@ This document records project decisions so future contributors can understand wh
 
 ## Current Version
 
-`0.9.0` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, manual transcripts, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, a simplified UI flow for new users, local data trust checks, one-click local backup, an installer build script, guided practice tracks, baseline/retry comparison, and recording preflight checks.
+`0.9.1` is still pre-`1.0`, but now includes the offline audio-coaching loop, report artifacts, automatic local transcripts from saved recording audio, local text suggestions, transcript-aware Markdown exports, enhanced microphone capture, boosted review playback, Coach Mode goals, readiness scorecards, progress summaries, progress export, camera practice sessions, built-in Windows speech transcription when the local recognizer is available, a simplified UI flow for new users, local data trust checks, one-click local backup, an installer build script, guided practice tracks, baseline/retry comparison, and recording preflight checks.
 
 ## Why Electron
 
@@ -39,6 +39,8 @@ The first risk was whether live volume coaching is useful and reliable. `0.2.0` 
 
 `0.9.0` focuses on the repeatable practice loop. It turns Coach Mode into guided tracks, saves guided metadata with each session, compares retries with the previous guided attempt, and runs compact preflight checks before recording.
 
+`0.9.1` hardens automatic transcription. The live recognizer now flushes JSON events directly to Electron, and Practice saves a 16 kHz mono `transcription.wav` sidecar while recording. After stop, the main process runs Windows `System.Speech` against that saved file so the final transcript comes from the exact microphone audio captured by VoiceCoach.
+
 ## Electron Launch Note
 
 Some shell environments may set:
@@ -72,7 +74,8 @@ Before marking a version ready:
 - verify camera preview appears in camera mode
 - verify audio-only mode still records without camera
 - verify built-in transcription starts or shows a clear warning if unavailable
-- confirm final transcript is saved after recording when recognition text is produced
+- confirm `transcription.wav` is saved beside `recording.webm`
+- confirm final transcript is created automatically after recording when speech is recognized
 - speak softly for more than 1.5 seconds
 - confirm warning appears
 - stay silent for more than 3 seconds

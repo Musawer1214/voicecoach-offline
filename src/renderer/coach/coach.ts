@@ -237,7 +237,7 @@ function buildPriorities(
       category: "transcript",
       severity: "info",
       title: "Add a transcript for clarity coaching",
-      detail: "Manual transcript text unlocks grammar, filler-word, and sentence-length suggestions."
+      detail: "Transcript text unlocks grammar, filler-word, and sentence-length suggestions."
     });
   } else if (scores.clarity < 70) {
     priorities.push({

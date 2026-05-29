@@ -67,6 +67,7 @@ import {
   smoothDb
 } from "./audio/level";
 import { buildAudioReport } from "./audio/report";
+import { encodePcmChunksToWav } from "./audio/wav";
 import { PRACTICE_GOALS, buildCoachReport, resolvePracticeGoal } from "./coach/coach";
 import {
   GUIDED_TRACKS,
@@ -82,7 +83,7 @@ import { buildTextSuggestions } from "./text/suggestions";
 type Screen = "home" | "coach" | "progress" | "calibration" | "practice" | "review" | "settings";
 type AudioMode = "idle" | "calibration" | "practice";
 type RecordingMode = "audio" | "video";
-type AutoTranscriptionState = "idle" | "starting" | "listening" | "unavailable" | "error";
+type AutoTranscriptionState = "idle" | "starting" | "listening" | "finalizing" | "unavailable" | "error";
 type ReliabilityCheckStatus = "pass" | "warning" | "fail";
 type RecordingPreflightCheck = {
   id: string;
@@ -147,6 +148,8 @@ export function App() {
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const pcmProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const pcmSilentGainRef = useRef<GainNode | null>(null);
   const intervalRef = useRef<number | null>(null);
   const smoothedDbRef = useRef<number | null>(null);
   const calibrationSamplesRef = useRef<VolumeSample[]>([]);
@@ -163,6 +166,9 @@ export function App() {
   const activeRecordingModeRef = useRef<RecordingMode>("audio");
   const autoTranscriptFinalsRef = useRef<string[]>([]);
   const autoTranscriptPartialRef = useRef("");
+  const autoTranscriptionEnabledRef = useRef(true);
+  const transcriptionPcmChunksRef = useRef<Float32Array[]>([]);
+  const transcriptionSampleRateRef = useRef(0);
   const microphoneElapsedMsRef = useRef(0);
   const recordingStartedAtMsRef = useRef<number | null>(null);
   const recordingWallStartedAtRef = useRef<number | null>(null);
@@ -170,6 +176,7 @@ export function App() {
   calibrationRef.current = calibration;
   isRecordingRef.current = isRecording;
   warningRef.current = warning;
+  autoTranscriptionEnabledRef.current = autoTranscriptionEnabled;
 
   useEffect(() => {
     void initializeApp();
@@ -530,6 +537,8 @@ export function App() {
     lastWarningAtRef.current = -Infinity;
     autoTranscriptFinalsRef.current = [];
     autoTranscriptPartialRef.current = "";
+    transcriptionPcmChunksRef.current = [];
+    transcriptionSampleRateRef.current = audioContextRef.current?.sampleRate ?? 0;
     setLiveTranscript("");
     setPartialTranscript("");
     setAutoTranscriptionState(autoTranscriptionEnabled ? "starting" : "idle");
@@ -581,8 +590,13 @@ export function App() {
 
     if (autoTranscriptionEnabled) {
       await window.voiceCoach.stopTranscription();
+      setAutoTranscriptionState("finalizing");
     }
 
+    const transcriptionAudioData = autoTranscriptionEnabled
+      ? encodePcmChunksToWav([...transcriptionPcmChunksRef.current], transcriptionSampleRateRef.current)
+      : null;
+    transcriptionPcmChunksRef.current = [];
     setIsRecording(false);
     isRecordingRef.current = false;
     const samples = [...practiceSamplesRef.current];
@@ -603,6 +617,7 @@ export function App() {
       calibrationSnapshot: calibrationForSession,
       metadata,
       recordingFile: "recording.webm",
+      transcriptionAudioFile: transcriptionAudioData ? "transcription.wav" : undefined,
       recordingKind: activeRecordingModeRef.current,
       cameraDeviceId: activeRecordingModeRef.current === "video" ? selectedCameraId : undefined,
       cameraDeviceLabel:
@@ -622,18 +637,18 @@ export function App() {
       summary: buildSessionSummary(samples, events, calibrationForSession)
     };
     const report = buildAudioReport(session, calibrationForSession);
-    const finalTranscript = buildFinalAutoTranscript();
-    const transcript = finalTranscript
+    const liveFinalTranscript = buildFinalAutoTranscript();
+    const liveTranscript = liveFinalTranscript
       ? {
           schemaVersion: 1 as const,
           sessionId: session.id,
           source: "windows_builtin" as const,
-          text: finalTranscript,
+          text: liveFinalTranscript,
           updatedAt: new Date().toISOString()
         }
       : null;
-    const textSuggestions = transcript ? buildTextSuggestions(session.id, transcript.text) : null;
-    const coachReport = buildCoachReport(session, report, textSuggestions, practiceGoalId);
+    const liveTextSuggestions = liveTranscript ? buildTextSuggestions(session.id, liveTranscript.text) : null;
+    const coachReport = buildCoachReport(session, report, liveTextSuggestions, practiceGoalId);
     activeRecordingCalibrationRef.current = null;
     recordingStartedAtMsRef.current = null;
     recordingWallStartedAtRef.current = null;
@@ -643,18 +658,26 @@ export function App() {
         session,
         report,
         coachReport,
-        recordingData: await recordingBlob.arrayBuffer()
+        recordingData: await recordingBlob.arrayBuffer(),
+        transcriptionAudioData: transcriptionAudioData ?? undefined
       });
       let savedWithTranscript = saved;
+      const transcript = await buildAutomaticTranscriptAfterSave(
+        session.id,
+        liveTranscript,
+        Boolean(transcriptionAudioData)
+      );
+      const textSuggestions = transcript ? buildTextSuggestions(session.id, transcript.text) : null;
       if (transcript && textSuggestions) {
         savedWithTranscript = await window.voiceCoach.saveTranscript({
           sessionId: session.id,
           transcript,
           textSuggestions
         });
+        const finalCoachReport = buildCoachReport(savedWithTranscript.session, savedWithTranscript.report, textSuggestions, practiceGoalId);
         savedWithTranscript = await window.voiceCoach.saveCoachReport({
           sessionId: session.id,
-          coachReport
+          coachReport: finalCoachReport
         });
       }
       await refreshSessionsAndTrust();
@@ -756,6 +779,37 @@ export function App() {
       .trim();
   }
 
+  async function buildAutomaticTranscriptAfterSave(
+    sessionId: string,
+    liveTranscript: TranscriptDocument | null,
+    hasTranscriptionAudio: boolean
+  ): Promise<TranscriptDocument | null> {
+    if (!autoTranscriptionEnabled) {
+      return null;
+    }
+
+    if (hasTranscriptionAudio) {
+      const result = await window.voiceCoach.transcribeSession({ sessionId });
+      const text = result.text.trim().replace(/\s+/g, " ");
+      if (result.ok && text) {
+        setLiveTranscript(text);
+        return {
+          schemaVersion: 1,
+          sessionId,
+          source: "windows_file",
+          text,
+          updatedAt: new Date().toISOString()
+        };
+      }
+
+      if (!liveTranscript) {
+        setWarning(result.message ?? "Automatic transcription did not produce text from this recording.");
+      }
+    }
+
+    return liveTranscript;
+  }
+
   async function startMicrophone(mode: AudioMode, onSample: (db: number, rms: number, elapsedMs: number) => void) {
     stopMicrophone();
     await refreshDevices(false);
@@ -775,8 +829,22 @@ export function App() {
     const audioStream = new MediaStream(stream.getAudioTracks());
     const source = audioContext.createMediaStreamSource(audioStream);
     const analyser = audioContext.createAnalyser();
+    const pcmProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+    const silentGain = audioContext.createGain();
     analyser.fftSize = 2048;
+    silentGain.gain.value = 0;
     source.connect(analyser);
+    source.connect(pcmProcessor);
+    pcmProcessor.connect(silentGain);
+    silentGain.connect(audioContext.destination);
+    pcmProcessor.onaudioprocess = (event) => {
+      if (!isRecordingRef.current || !autoTranscriptionEnabledRef.current) {
+        return;
+      }
+
+      const input = event.inputBuffer.getChannelData(0);
+      transcriptionPcmChunksRef.current.push(new Float32Array(input));
+    };
 
     streamRef.current = stream;
     if (previewVideoRef.current) {
@@ -784,6 +852,9 @@ export function App() {
     }
     audioContextRef.current = audioContext;
     analyserRef.current = analyser;
+    pcmProcessorRef.current = pcmProcessor;
+    pcmSilentGainRef.current = silentGain;
+    transcriptionSampleRateRef.current = audioContext.sampleRate;
     setAudioMode(mode);
     smoothedDbRef.current = null;
 
@@ -810,10 +881,16 @@ export function App() {
     if (previewVideoRef.current) {
       previewVideoRef.current.srcObject = null;
     }
+    pcmProcessorRef.current?.disconnect();
+    pcmSilentGainRef.current?.disconnect();
+    pcmProcessorRef.current = null;
+    pcmSilentGainRef.current = null;
     void audioContextRef.current?.close();
     audioContextRef.current = null;
     analyserRef.current = null;
     recorderRef.current = null;
+    transcriptionPcmChunksRef.current = [];
+    transcriptionSampleRateRef.current = 0;
     activeRecordingCalibrationRef.current = null;
     recordingStartedAtMsRef.current = null;
     recordingWallStartedAtRef.current = null;
@@ -1018,7 +1095,7 @@ export function App() {
           </div>
           <div>
             <strong>VoiceCoach Offline</strong>
-            <span>v{meta?.version ?? "0.9.0"}</span>
+            <span>v{meta?.version ?? "0.9.1"}</span>
           </div>
         </div>
 
@@ -1272,7 +1349,9 @@ function HomeScreen({
   const latestSession = sessions[0] ?? null;
   const coachAverage = formatAverageScore(sessions.map((session) => session.coachReport?.readinessScore));
   const videoSessionCount = sessions.filter((session) => session.session.recordingKind === "video").length;
-  const transcriptCount = sessions.filter((session) => session.transcript?.source === "windows_builtin").length;
+  const transcriptCount = sessions.filter(
+    (session) => session.transcript?.source === "windows_builtin" || session.transcript?.source === "windows_file"
+  ).length;
   const trustSummary = getTrustSummary(trustSnapshot);
   const recommendedTrack = chooseRecommendedTrack(sessions, activeGoalId);
   const recommendedPlan = buildGuidedSessionPlan(recommendedTrack.id, sessions);
@@ -2725,7 +2804,7 @@ function SettingsScreen({
           <strong>{reviewPlaybackGain.toFixed(2)}x</strong>
         </label>
         <div className="settings-grid">
-          <Metric label="Version" value={meta?.version ?? "0.9.0"} />
+          <Metric label="Version" value={meta?.version ?? "0.9.1"} />
           <Metric label="Data Folder" value={meta?.dataDir ?? "--"} />
           <Metric label="Warning Rule" value="Low for 1.5s, 5s cooldown" />
           <Metric label="Selected Mic" value={settings?.selectedDeviceLabel ?? "Not saved"} />
@@ -3194,7 +3273,7 @@ async function buildRecordingPreflightChecks({
       label: "Transcript",
       status: autoTranscriptionEnabled ? "warning" : "pass",
       detail: autoTranscriptionEnabled
-        ? "Windows transcription will be attempted locally; save a manual transcript if it is unavailable."
+        ? "Automatic Windows transcription will run live and again from the saved recording audio."
         : "Built-in transcription is off for this session."
     }
   ];
@@ -3294,6 +3373,10 @@ function formatTranscriptionState(state: AutoTranscriptionState, enabled: boolea
     return "Listening";
   }
 
+  if (state === "finalizing") {
+    return "Creating final transcript";
+  }
+
   if (state === "error") {
     return "Unavailable";
   }
@@ -3370,6 +3453,10 @@ function formatSkillLabel(value: keyof CoachReport["scores"] | null): string {
 }
 
 function formatTranscriptSource(source?: TranscriptDocument["source"]): string {
+  if (source === "windows_file") {
+    return "Automatic speech transcript";
+  }
+
   if (source === "windows_builtin") {
     return "Built-in speech";
   }

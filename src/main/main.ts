@@ -7,6 +7,7 @@ import {
   exportProgressReport,
   exportSessionReport,
   getDataDir,
+  getSessionTranscriptionAudioPath,
   getTrustSnapshot,
   listSessions,
   loadCalibration,
@@ -31,7 +32,7 @@ import {
   SessionIdPayload,
   UpdateSessionPayload
 } from "../shared/types.js";
-import { startTranscription, stopTranscription } from "./transcription.js";
+import { startTranscription, stopTranscription, transcribeWaveFile } from "./transcription.js";
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL);
 let mainWindow: BrowserWindow | null = null;
@@ -111,5 +112,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle("transcription:start", (_event, options) => startTranscription(mainWindow, options));
   ipcMain.handle("transcription:stop", () => {
     stopTranscription();
+  });
+  ipcMain.handle("transcription:transcribe-session", async (_event, payload: SessionIdPayload) => {
+    const audioPath = await getSessionTranscriptionAudioPath(payload);
+    return transcribeWaveFile(audioPath, { provider: "windows_system_speech", culture: "en-US" });
   });
 }

@@ -15,6 +15,25 @@ This project follows pre-`1.0.0` semantic versioning:
 - `0.9.x`: guided practice loop, baseline/retry comparison, and recording preflight hardening
 - `1.0.0`: stable public release
 
+## 0.9.1 - 2026-05-29
+
+Fixed:
+
+- live Windows speech-recognition events now write directly to stdout so recognized words reach the Electron renderer
+- final automatic transcript generation no longer depends only on the Windows default microphone route
+- post-recording transcription now reads a saved 16 kHz mono PCM `transcription.wav` sidecar from the session folder
+
+Added:
+
+- automatic post-session transcript creation from the saved microphone audio
+- transcript source `windows_file` for final transcripts created from the saved recording audio
+- WAV encoder unit tests for the transcription sidecar file
+
+Tests:
+
+- Windows recognizer smoke test passed with generated speech audio
+- automated test suite and production build pass for this release
+
 ## 0.9.0 - 2026-05-29
 
 Added:

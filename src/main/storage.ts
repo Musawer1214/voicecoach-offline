@@ -35,6 +35,7 @@ const SETTINGS_FILE = "settings.json";
 const SESSIONS_DIR = "sessions";
 const SESSION_FILE = "session.json";
 const RECORDING_FILE = "recording.webm";
+const TRANSCRIPTION_AUDIO_FILE = "transcription.wav";
 const REPORT_FILE = "report.json";
 const TRANSCRIPT_FILE = "transcript.json";
 const SUGGESTIONS_FILE = "suggestions.json";
@@ -145,6 +146,12 @@ export async function saveSession(payload: SaveSessionPayload): Promise<SavedSes
 
   await mkdir(folderPath, { recursive: true });
   await writeFile(recordingPath, Buffer.from(new Uint8Array(payload.recordingData)));
+  if (payload.transcriptionAudioData) {
+    await writeFile(
+      path.join(folderPath, TRANSCRIPTION_AUDIO_FILE),
+      Buffer.from(new Uint8Array(payload.transcriptionAudioData))
+    );
+  }
   await writeJson(sessionPath, payload.session);
   if (payload.report) {
     await writeJson(path.join(folderPath, REPORT_FILE), payload.report);
@@ -163,6 +170,11 @@ export async function saveSession(payload: SaveSessionPayload): Promise<SavedSes
     sessionPath,
     recordingPath
   );
+}
+
+export async function getSessionTranscriptionAudioPath(payload: SessionIdPayload): Promise<string> {
+  const found = await findSessionFolder(payload.sessionId);
+  return path.join(found.folderPath, TRANSCRIPTION_AUDIO_FILE);
 }
 
 export async function updateSession(payload: UpdateSessionPayload): Promise<SavedSession> {
@@ -340,7 +352,7 @@ export async function getTrustSnapshot(): Promise<TrustSnapshot> {
         process.platform === "win32"
           ? "Windows speech recognition can be attempted locally."
           : "Built-in Windows transcription is only available on Windows.",
-      action: process.platform === "win32" ? undefined : "Use manual transcript entry on this platform."
+      action: process.platform === "win32" ? undefined : "Automatic transcription currently requires Windows."
     }
   ];
 

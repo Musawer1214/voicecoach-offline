@@ -17,7 +17,7 @@ export type CalibrationProfile = {
 export type MicrophoneProcessingMode = "enhanced" | "natural";
 export type CameraResolution = "640x360" | "1280x720" | "1920x1080";
 export type RecordingKind = "audio" | "video";
-export type TranscriptSource = "manual" | "windows_dictation" | "windows_builtin";
+export type TranscriptSource = "manual" | "windows_dictation" | "windows_builtin" | "windows_file";
 
 export type AppSettings = {
   schemaVersion: 1;
@@ -180,6 +180,7 @@ export type VoiceCoachSession = {
   calibrationSnapshot?: CalibrationProfile | null;
   metadata?: SessionMetadata;
   recordingFile: "recording.webm";
+  transcriptionAudioFile?: "transcription.wav";
   recordingKind?: RecordingKind;
   cameraDeviceId?: string;
   cameraDeviceLabel?: string;
@@ -253,6 +254,7 @@ export type SaveSessionPayload = {
   report?: AudioReport;
   coachReport?: CoachReport;
   recordingData: ArrayBuffer;
+  transcriptionAudioData?: ArrayBuffer;
 };
 
 export type UpdateSessionPayload = {
@@ -325,6 +327,13 @@ export type TranscriptionStartResult = {
   provider: TranscriptionProvider;
 };
 
+export type TranscriptionFileResult = {
+  ok: boolean;
+  provider: TranscriptionProvider;
+  text: string;
+  message?: string;
+};
+
 export type VoiceCoachApi = {
   getAppMeta(): Promise<AppMeta>;
   loadSettings(): Promise<AppSettings | null>;
@@ -346,6 +355,7 @@ export type VoiceCoachApi = {
   createDataBackup(): Promise<DataBackupResult>;
   startTranscription(options?: TranscriptionStartOptions): Promise<TranscriptionStartResult>;
   stopTranscription(): Promise<void>;
+  transcribeSession(payload: SessionIdPayload): Promise<TranscriptionFileResult>;
   onTranscriptionEvent(callback: (event: TranscriptionEvent) => void): () => void;
 };
 
@@ -372,6 +382,7 @@ export function isVoiceCoachSession(value: unknown): value is VoiceCoachSession 
     (candidate.recordingKind === undefined ||
       candidate.recordingKind === "audio" ||
       candidate.recordingKind === "video") &&
+    (candidate.transcriptionAudioFile === undefined || candidate.transcriptionAudioFile === "transcription.wav") &&
     Array.isArray(candidate.samples) &&
     Array.isArray(candidate.events) &&
     typeof candidate.summary?.targetVolumePercent === "number" &&
@@ -408,7 +419,8 @@ export function isTranscriptDocument(value: unknown): value is TranscriptDocumen
     typeof candidate.sessionId === "string" &&
     (candidate.source === "manual" ||
       candidate.source === "windows_dictation" ||
-      candidate.source === "windows_builtin") &&
+      candidate.source === "windows_builtin" ||
+      candidate.source === "windows_file") &&
     typeof candidate.text === "string" &&
     typeof candidate.updatedAt === "string"
   );

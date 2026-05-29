@@ -12,6 +12,7 @@ import {
   SessionIdPayload,
   TrustSnapshot,
   TranscriptionEvent,
+  TranscriptionFileResult,
   TranscriptionStartOptions,
   TranscriptionStartResult,
   UpdateSessionPayload,
@@ -47,6 +48,8 @@ const api: VoiceCoachApi = {
   startTranscription: (options?: TranscriptionStartOptions) =>
     ipcRenderer.invoke("transcription:start", options) as Promise<TranscriptionStartResult>,
   stopTranscription: () => ipcRenderer.invoke("transcription:stop") as Promise<void>,
+  transcribeSession: (payload: SessionIdPayload) =>
+    ipcRenderer.invoke("transcription:transcribe-session", payload) as Promise<TranscriptionFileResult>,
   onTranscriptionEvent: (callback: (event: TranscriptionEvent) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: TranscriptionEvent) => callback(payload);
     ipcRenderer.on("transcription:event", listener);

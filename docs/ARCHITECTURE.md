@@ -86,6 +86,7 @@ VoiceCoachData/
   sessions/
     <session-date>/
       recording.webm
+      transcription.wav
       session.json
       report.json
       coach-report.json
@@ -160,6 +161,7 @@ type VoiceCoachSession = {
   calibrationSnapshot?: CalibrationProfile | null;
   metadata?: SessionMetadata;
   recordingFile: "recording.webm";
+  transcriptionAudioFile?: "transcription.wav";
   samples: VolumeSample[];
   events: SessionEvent[];
   summary: {
@@ -318,22 +320,31 @@ This is a recovery aid, not a cloud sync feature.
 ```text
 getUserMedia(audio + optional video)
   -> Web Audio analyzer for calibrated volume samples
+  -> 16 kHz mono PCM sidecar for transcription.wav
   -> MediaRecorder for recording.webm
   -> session.json recordingKind + cameraSettings
   -> Review media player
 ```
 
-Built-in transcription is intentionally isolated from the media recorder. The main process starts a local Windows `System.Speech` helper process, reads JSON events from stdout, and forwards them over IPC:
+Built-in transcription is intentionally isolated from the media recorder. During recording, the renderer captures a clean mono PCM sidecar for final transcription. The main process also starts a local Windows `System.Speech` helper process, reads JSON events from stdout, and forwards them over IPC for live preview:
 
 ```text
 PowerShell + System.Speech
   -> ready / partial / final / error events
   -> preload transcription bridge
   -> live transcript preview
-  -> transcript.json + suggestions.json
 ```
 
-The review screen still supports Windows speech input as a manual fallback. Transcript source values now distinguish `manual`, `windows_dictation`, and `windows_builtin`.
+When recording stops, the saved sidecar becomes the preferred final transcript path:
+
+```text
+transcription.wav
+  -> main process System.Speech file recognizer
+  -> transcript.json + suggestions.json
+  -> coach-report.json refresh
+```
+
+The review screen still supports Windows speech input as a manual fallback. Transcript source values now distinguish `manual`, `windows_dictation`, `windows_builtin`, and `windows_file`.
 
 ## Security Defaults
 

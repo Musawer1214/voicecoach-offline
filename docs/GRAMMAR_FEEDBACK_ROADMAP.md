@@ -29,9 +29,9 @@ Avoid wording like:
 - "Bad grammar"
 - "Failed"
 
-## Current Status in `0.9.0`
+## Current Status in `0.9.1`
 
-`0.9.0` keeps grammar and clarity feedback offline, combines transcript signals with audio scoring inside Coach Mode, and keeps built-in Windows transcription when the local recognizer is available. Manual transcript entry and Windows speech-assisted entry remain available as fallbacks, now tucked behind the Review screen's transcript disclosure section. The release adds guided practice tracks and retry comparison so transcript feedback has a clearer practice loop before the `1.0.0` hardening pass.
+`0.9.1` keeps grammar and clarity feedback offline, combines transcript signals with audio scoring inside Coach Mode, and creates automatic final transcripts from the saved `transcription.wav` sidecar when the local Windows recognizer can understand the audio. Manual transcript entry and Windows speech-assisted entry remain available as fallbacks, but the normal path is now app-owned automatic speech-to-text after recording.
 
 Added:
 
@@ -41,10 +41,11 @@ Added:
 - local checks for filler words, repeated phrases, long sentences, and weak openings
 - `coach-report.json` saved beside the session
 - Coach Mode clarity score and next-drill suggestions
+- automatic `transcription.wav` sidecar captured during recording
+- automatic `windows_file` transcript source from the saved audio
 
 Still deferred:
 
-- automatic offline speech-to-text
 - bundled Whisper model or binary
 - timestamped transcript segments
 

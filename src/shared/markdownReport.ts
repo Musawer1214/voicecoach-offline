@@ -121,6 +121,10 @@ export function buildMarkdownReport(
 }
 
 function formatTranscriptSource(source: TranscriptDocument["source"]): string {
+  if (source === "windows_file") {
+    return "Automatic speech transcript";
+  }
+
   if (source === "windows_builtin") {
     return "Built-in Windows speech";
   }

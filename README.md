@@ -2,11 +2,11 @@
 
 ![VoiceCoach Offline Coach Mode preview](assets/brand/voicecoach-readme-hero.svg)
 
-VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio or camera practice sessions, gives live low-volume feedback, captures built-in speech transcripts when available, and saves local review reports.
+VoiceCoach Offline is an offline-first Windows desktop app for practicing stronger, clearer speaking. It calibrates your microphone, records audio or camera practice sessions, gives live low-volume feedback, creates automatic local speech transcripts when available, and saves local review reports.
 
-Current version: `0.9.0`
+Current version: `0.9.1`
 
-`0.9.0` is the Guided Practice release: structured practice tracks, baseline/retry comparison, recording preflight checks, and the final major feature step before the planned `1.0.0` stabilization release.
+`0.9.1` is the automatic transcription hardening release: VoiceCoach now records a clean local WAV sidecar for transcription and runs a post-recording Windows speech pass from the saved audio.
 
 ## Highlights
 
@@ -19,23 +19,22 @@ Current version: `0.9.0`
 - Calibrated live volume meter with low-volume warnings.
 - Audio-only or camera-plus-microphone local recording with `recording.webm` session files.
 - Camera selector, resolution, frame-rate, and mirror-preview controls.
-- Built-in Windows speech recognition provider for live transcript text and saved final transcripts when available.
+- Built-in Windows speech recognition provider for live transcript text and automatic final transcripts from saved session audio.
 - Coach Mode goals for projection, clarity, pacing, interview answers, and confident delivery.
 - Local scorecards for projection, clarity, pacing, consistency, and readiness.
 - Progress dashboard with readiness trends, goal summaries, and next-practice focus.
-- Manual transcript analysis for filler words, repeated phrases, long sentences, and weak openings.
-- Windows speech input helper remains available for manual fallback transcript entry.
+- Transcript analysis for filler words, repeated phrases, long sentences, and weak openings.
+- Windows speech input helper remains available as an optional fallback, but the normal flow is automatic speech-to-text from your recording.
 - Exportable Markdown review reports.
 - Exportable Markdown progress reports.
 - Windows unpacked, portable, and installer build scripts.
 
-## What's New in 0.9.0
+## What's New in 0.9.1
 
-- Added guided practice tracks and track-specific prompts.
-- Added baseline/retry session planning from Home and Coach Mode.
-- Added guided comparison in Review showing previous score, current score, and change.
-- Added recording preflight checks before saving a session.
-- Added guided metadata to session JSON for future v1 migrations.
+- Added `transcription.wav` sidecar capture during recording for automatic post-session speech-to-text.
+- Fixed live recognizer event output so Windows recognized words are sent back to Electron.
+- Changed final transcript creation to use the exact saved microphone audio instead of only the Windows default input route.
+- Added a Windows recognizer smoke test path using 16 kHz mono PCM audio.
 
 ## Status
 
@@ -103,13 +102,13 @@ npm run dist:installer
 Portable builds are written to:
 
 ```text
-release/VoiceCoach Offline 0.9.0.exe
+release/VoiceCoach Offline 0.9.1.exe
 ```
 
 Installer builds are written to:
 
 ```text
-release/VoiceCoach Offline Setup 0.9.0.exe
+release/VoiceCoach Offline Setup 0.9.1.exe
 ```
 
 Unpacked builds are written to:
@@ -131,6 +130,7 @@ VoiceCoachData/
   sessions/
     <session-date>/
       recording.webm
+      transcription.wav
       session.json
       report.json
       coach-report.json
@@ -148,7 +148,7 @@ Session, calibration, report, coach, transcript, and suggestion files use `schem
 
 VoiceCoach Offline is designed for local practice. Audio/video recordings, transcripts, scorecards, suggestions, and session metadata stay on the user's PC. The app does not require internet access for its current app-owned features.
 
-Built-in transcription uses the Windows `System.Speech` recognizer on the local PC when available. Windows speech input is still optional as a fallback: the review screen can focus the transcript box so Windows voice typing or Windows Voice Access can enter text there if you choose to use those Windows features.
+Built-in transcription uses the Windows `System.Speech` recognizer on the local PC when available. During recording, VoiceCoach saves a local `transcription.wav` copy of the microphone audio and uses it to create the final transcript automatically after you stop. Windows speech input is still optional as a fallback, but the app does not require you to type or paste a transcript for normal use.
 
 ## Documentation
 
